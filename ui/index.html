@@ -1,6 +1,6 @@
-
 <!doctype html>
 <html lang="th">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -14,13 +14,13 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="case-manager.css">
 
-  
-<script src="data.js" defer></script>
-<script src="config.js" defer></script>
-<script src="i18n.js" defer></script>
-<script src="api.js" defer></script>
-<script src="app.js" defer></script>
-<script src="case-manager.js" defer></script>
+
+  <script src="data.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="api.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="case-manager.js" defer></script>
 </head>
 
 <body>
@@ -76,14 +76,14 @@
           <h1 id="pageTitle">Overview</h1>
         </div>
 
-<div class="language-switch" role="group" aria-label="Choose language">
-  <button type="button" data-lang="th" class="active">
-    TH
-  </button>
-  <button type="button" data-lang="en">
-    EN
-  </button>
-</div>
+        <div class="language-switch" role="group" aria-label="Choose language">
+          <button type="button" data-lang="th" class="active">
+            TH
+          </button>
+          <button type="button" data-lang="en">
+            EN
+          </button>
+        </div>
 
         <div class="header-actions">
           <span class="mode-badge">● DEMO DATA</span>
@@ -204,11 +204,7 @@
             </div>
 
             <div class="graph-container">
-              <svg
-                id="moneyGraph"
-                viewBox="0 0 850 460"
-                role="img"
-                aria-label="กราฟเครือข่ายธุรกรรม">
+              <svg id="moneyGraph" viewBox="0 0 850 460" role="img" aria-label="กราฟเครือข่ายธุรกรรม">
               </svg>
             </div>
 
@@ -232,12 +228,7 @@
                 เลื่อนเพื่อแสดงธุรกรรมตามลำดับเวลา
               </label>
 
-              <input
-                type="range"
-                min="0"
-                max="10"
-                value="10"
-                id="replayRange">
+              <input type="range" min="0" max="10" value="10" id="replayRange">
 
               <p class="helper" id="replayTime"></p>
             </section>
@@ -370,10 +361,7 @@
                 ขอ AI Summary ผ่าน API
               </button>
 
-              <div
-                id="aiResult"
-                class="ai-result"
-                aria-live="polite">
+              <div id="aiResult" class="ai-result" aria-live="polite">
                 ยังไม่ได้เชื่อม AWS · ใช้รายงานแบบ Rule-based ได้
               </div>
             </section>
@@ -388,5 +376,23 @@
       </footer>
     </div>
   </div>
+
+
+  <script>
+    // Keep the language switch inside
+    // the right-side header actions group.
+    document.addEventListener("DOMContentLoaded", () => {
+      const headerActions =
+        document.querySelector(".header-actions");
+
+      const languageSwitch =
+        document.querySelector(".language-switch");
+
+      if (headerActions && languageSwitch) {
+        headerActions.prepend(languageSwitch);
+      }
+    });
+  </script>
+
 </body>
 </html>

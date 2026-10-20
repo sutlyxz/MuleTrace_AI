@@ -1,4 +1,3 @@
-
 :root {
   --bg: #f7f5f1;
   --paper: #ffffff;
@@ -27,7 +26,9 @@ body {
   color: var(--ink);
 }
 
-button, select, input {
+button,
+select,
+input {
   font: inherit;
 }
 
@@ -94,7 +95,8 @@ input:focus-visible {
   font-size: 21px;
 }
 
-.nav-label, .eyebrow {
+.nav-label,
+.eyebrow {
   color: #9a8061;
   letter-spacing: 1.8px;
   font-size: 10px;
@@ -509,10 +511,21 @@ main {
   border-radius: 50%;
 }
 
-.dot.target { background: #cfaa78; }
-.dot.flagged { background: #ca7975; }
-.dot.watch { background: #c5a26b; }
-.dot.normal { background: #86a7aa; }
+.dot.target {
+  background: #cfaa78;
+}
+
+.dot.flagged {
+  background: #ca7975;
+}
+
+.dot.watch {
+  background: #c5a26b;
+}
+
+.dot.normal {
+  background: #86a7aa;
+}
 
 .field-label,
 .helper {
@@ -560,7 +573,8 @@ th {
   font-size: 11px;
 }
 
-td, th {
+td,
+th {
   padding: 13px 12px;
   border-bottom: 1px solid var(--line);
 }
@@ -824,5 +838,699 @@ footer {
 @media (max-width: 720px) {
   .language-switch button {
     padding: 7px 10px;
+  }
+}
+
+/* ============================================
+   MuleTrace AI — Header Layout Fix
+   TH/EN + Demo Status + Case Selector
+   ============================================ */
+
+/* จัดแถบ Header ให้มีซ้ายและขวาชัดเจน */
+.topbar {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* รวมเครื่องมือทั้งหมดไว้ด้านขวา */
+.topbar .header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-wrap: nowrap;
+  gap: 14px !important;
+
+  width: auto !important;
+  max-width: 100%;
+  margin-left: auto !important;
+  flex: 0 0 auto;
+}
+
+/* ปุ่มเปลี่ยนภาษาต้องไม่ลอยหรือขยับ */
+.topbar .language-switch {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+
+  margin: 0 !important;
+  padding: 4px;
+
+  width: auto;
+  flex: 0 0 auto;
+
+  background: #f4efe7;
+  border: 1px solid #e8dfd3;
+  border-radius: 12px;
+}
+
+/* ปุ่ม TH และ EN มีขนาดเท่ากัน */
+.topbar .language-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  min-width: 42px;
+  height: 35px;
+  padding: 0;
+
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+
+  color: #8b7d6b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.topbar .language-switch button:hover {
+  color: #765334;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* ภาษาที่กำลังเลือก */
+.topbar .language-switch button.active {
+  color: #906a44;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(70, 50, 30, 0.1);
+}
+
+/* ไม่ให้ช่องเลือกเคสโดนบีบ */
+.topbar .header-actions select {
+  flex-shrink: 0;
+}
+
+/* ============================
+   Tablet
+   ============================ */
+
+@media (max-width: 1000px) {
+  .topbar {
+    gap: 16px;
+  }
+
+  .topbar .header-actions {
+    gap: 10px !important;
+  }
+}
+
+/* ============================
+   Mobile
+   ============================ */
+
+@media (max-width: 720px) {
+  .topbar {
+    height: auto !important;
+    min-height: 80px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 16px;
+    padding-bottom: 16px;
+    gap: 14px;
+  }
+
+  .topbar .header-actions {
+    width: 100% !important;
+    margin-left: 0 !important;
+    flex-wrap: wrap;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .topbar .language-switch button {
+    width: 39px;
+    min-width: 39px;
+    height: 33px;
+  }
+}
+
+/* ==========================================
+   MuleTrace AI — Stable Bilingual Layout
+   Prevent layout shifts between TH and EN
+   ========================================== */
+
+/* ให้ขนาดกล่องรวม padding และ border เสมอ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ป้องกันหน้าเว็บขยายแนวนอน */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ฟอนต์และความสูงบรรทัดคงที่ */
+body {
+  line-height: 1.5;
+}
+
+/* ==========================================
+   1. TOP HEADER
+   ========================================== */
+
+.topbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 24px;
+
+  min-height: 106px;
+  min-width: 0;
+}
+
+/* ฝั่งชื่อหน้ามีพื้นที่ยืดหยุ่น */
+.topbar> :first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* ชื่อหน้าไม่เปลี่ยนความสูงตามภาษา */
+.topbar h1,
+#pageTitle {
+  line-height: 1.25;
+  min-height: 1.25em;
+  margin-bottom: 0;
+}
+
+/* รวมเครื่องมือไว้ด้านขวาตลอด */
+.topbar .header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-wrap: nowrap !important;
+
+  gap: 12px !important;
+  flex: 0 0 auto;
+
+  width: auto !important;
+  margin-left: auto !important;
+}
+
+/* ==========================================
+   2. LANGUAGE SWITCH
+   ========================================== */
+
+.topbar .language-switch {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+
+  position: static !important;
+  transform: none !important;
+
+  width: 100px !important;
+  min-width: 100px !important;
+  height: 43px;
+
+  gap: 3px;
+  padding: 4px;
+  margin: 0 !important;
+
+  flex: 0 0 100px;
+
+  border: 1px solid #e8dfd3;
+  border-radius: 11px;
+  background: #f4efe7;
+}
+
+/* ปุ่ม TH / EN ขนาดเท่ากัน */
+.topbar .language-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 43px !important;
+  min-width: 43px !important;
+  height: 33px !important;
+
+  margin: 0;
+  padding: 0 !important;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: transparent;
+  color: #8b7d6b;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+/* ปุ่มที่เลือกใช้เงา ไม่ขยายขนาด */
+.topbar .language-switch button.active {
+  background: #ffffff;
+  color: #906a44;
+  box-shadow: 0 2px 6px rgba(70, 50, 30, 0.1);
+}
+
+/* ==========================================
+   3. HEADER STATUS & CASE SELECTOR
+   ========================================== */
+
+/* ป้องกันป้าย Demo Data ถูกบีบ */
+.topbar .mode-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ช่องเลือกเคสกว้างเท่าเดิมเสมอ */
+.topbar #caseSelect {
+  width: 125px;
+  min-width: 125px;
+  max-width: 125px;
+
+  flex: 0 0 125px;
+}
+
+/* ==========================================
+   4. SIDEBAR
+   ========================================== */
+
+/* เมนูสูงเท่ากันในทุกภาษา */
+.sidebar .nav-item {
+  display: flex;
+  align-items: center;
+
+  min-height: 48px;
+  line-height: 1.4;
+}
+
+/* ไม่ให้ข้อความเมนูดันไอคอน */
+.sidebar .nav-item span {
+  min-width: 0;
+}
+
+/* ==========================================
+   5. OVERVIEW HERO
+   ========================================== */
+
+/* กรอบ Hero คงความสูงขั้นต่ำ */
+#page-overview .intro {
+  min-height: 225px;
+}
+
+/* หัวข้อ Hero ใช้ความสูงบรรทัดคงที่ */
+#page-overview .intro h1,
+#page-overview .intro h2 {
+  line-height: 1.12;
+}
+
+/* กันข้อความคำอธิบายดันปุ่ม */
+#page-overview .intro p {
+  line-height: 1.65;
+}
+
+/* ==========================================
+   6. KPI CARDS
+   ========================================== */
+
+#metrics {
+  grid-template-columns: repeat(4,
+      minmax(0, 1fr));
+}
+
+/* ให้การ์ดสูงเท่ากัน */
+#metrics .metric {
+  min-width: 0;
+  min-height: 96px;
+}
+
+/* ชื่อ KPI มีความสูงขั้นต่ำคงที่ */
+#metrics .metric small {
+  display: block;
+  min-height: 18px;
+  line-height: 18px;
+}
+
+/* ค่าตัวเลขต้องไม่ถูกบีบ */
+#metrics .metric strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+/* ==========================================
+   7. PANELS AND CASE CARDS
+   ========================================== */
+
+#page-overview .panel {
+  min-width: 0;
+}
+
+/* หัวการ์ดรักษาแนวเดียวกัน */
+#page-overview .section-head {
+  min-height: 48px;
+}
+
+/* แถวรายการเคสมีความสูงขั้นต่ำ */
+#page-overview .case-row {
+  min-height: 68px;
+}
+
+/* ตัวเลขใช้ความกว้างสม่ำเสมอ */
+#page-overview .case-row,
+#page-overview .panel {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================
+   8. TABLET
+   ========================================== */
+
+@media (max-width: 1100px) {
+  .topbar {
+    gap: 12px;
+  }
+
+  .topbar .header-actions {
+    gap: 8px !important;
+  }
+
+  #metrics {
+    grid-template-columns: repeat(2,
+        minmax(0, 1fr));
+  }
+}
+
+/* ==========================================
+   9. MOBILE
+   ========================================== */
+
+@media (max-width: 720px) {
+  .topbar {
+    height: auto !important;
+    min-height: 100px;
+
+    flex-wrap: wrap;
+    align-items: center;
+
+    gap: 12px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .topbar .header-actions {
+    width: 100% !important;
+    flex: 1 1 100%;
+
+    margin-left: 0 !important;
+
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+  }
+
+  #metrics {
+    grid-template-columns: repeat(2,
+        minmax(0, 1fr));
+  }
+
+  #page-overview .intro {
+    min-height: 0;
+  }
+
+  #page-overview .section-head {
+    min-height: 0;
+  }
+}
+
+/* ==========================================
+   MuleTrace AI — Final Language Layout Lock
+   Keep buttons in the same position for TH/EN
+   ========================================== */
+
+/* ปุ่มเริ่มสืบสวน: กว้างเท่ากันทุกภาษา */
+#page-overview .intro [data-go="investigation"] {
+  width: 160px !important;
+  min-width: 160px !important;
+  height: 44px;
+
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  font-size: 12px;
+}
+
+/* ปุ่มภาษา: ขนาดคงที่ */
+.topbar .language-switch {
+  width: 100px !important;
+  min-width: 100px !important;
+  flex: 0 0 100px !important;
+}
+
+/* ป้าย Demo Data: กว้างเท่ากันทั้งไทยและอังกฤษ */
+.topbar .mode-badge {
+  width: 105px !important;
+  min-width: 105px !important;
+
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+
+  white-space: nowrap;
+  flex: 0 0 105px;
+}
+
+/* คำว่า CASE / เคส */
+.topbar .case-select-label {
+  width: 34px !important;
+  min-width: 34px !important;
+  text-align: center;
+  white-space: nowrap;
+  flex: 0 0 34px;
+}
+
+/* กล่องเลือกเคส */
+.topbar #caseSelect {
+  width: 125px !important;
+  min-width: 125px !important;
+  flex: 0 0 125px;
+}
+
+/* เครื่องมือ Header อยู่ติดกัน ไม่เปลี่ยนระยะ */
+.topbar .header-actions {
+  gap: 10px !important;
+}
+
+/* มือถือ: ปรับขนาดให้พอดี */
+@media (max-width: 720px) {
+  #page-overview .intro [data-go="investigation"] {
+    width: 150px !important;
+    min-width: 150px !important;
+  }
+
+  .topbar .header-actions {
+    gap: 8px !important;
+  }
+}
+
+/* ==========================================
+  
+/* ==========================================
+   MULETRACE AI — FINAL SIDEBAR LAYOUT
+   Desktop: Fixed full-height sidebar
+   Mobile: Responsive horizontal navigation
+   Applies to ALL pages
+   ========================================== */
+
+/* Desktop layout */
+@media (min-width: 721px) {
+
+  .shell {
+    display: block !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Sidebar ติดขอบซ้ายเต็มความสูงของจอ */
+  .sidebar {
+    position: fixed !important;
+
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    right: auto !important;
+
+    width: 245px !important;
+
+    height: 100vh !important;
+    height: 100dvh !important;
+
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    padding: 29px 18px;
+
+    background: #ffffff !important;
+    border-right: 1px solid #e9e5df;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    z-index: 100;
+  }
+
+  /* สถานะ Demo อยู่ล่างสุด */
+  .sidebar-foot {
+    margin-top: auto !important;
+    flex-shrink: 0;
+  }
+
+  /* เนื้อหาทุกหน้าขยับพ้น Sidebar */
+  .main-area {
+    width: calc(100% - 245px) !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    margin-left: 245px !important;
+
+    display: flex;
+    flex-direction: column;
+
+    min-width: 0;
+  }
+
+  /* เนื้อหาหลักกินพื้นที่ที่เหลือ */
+  .main-area>main {
+    flex: 1 0 auto;
+    min-width: 0;
+  }
+
+  /* Footer อยู่ด้านล่างส่วนเนื้อหา */
+  .main-area>footer {
+    width: 100%;
+    flex-shrink: 0;
+  }
+}
+
+/* Tablet */
+@media (min-width: 721px) and (max-width: 1100px) {
+
+  .sidebar {
+    width: 215px !important;
+    padding: 23px 14px;
+  }
+
+  .main-area {
+    width: calc(100% - 215px) !important;
+    margin-left: 215px !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+
+  .shell {
+    display: block !important;
+    width: 100%;
+    min-height: 100dvh;
+  }
+
+  /* Sidebar กลายเป็นแถบเมนูด้านบน */
+  .sidebar {
+    position: relative !important;
+
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+
+    width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: flex !important;
+    flex-direction: column;
+
+    padding: 13px 15px;
+
+    background: #ffffff !important;
+
+    border-right: 0;
+    border-bottom: 1px solid #e9e5df;
+
+    overflow: visible !important;
+  }
+
+  /* เมนูเลื่อนไปด้านข้างได้ */
+  .sidebar nav {
+    display: flex !important;
+
+    gap: 6px;
+
+    width: 100%;
+
+    overflow-x: auto !important;
+    overflow-y: hidden;
+
+    padding-bottom: 6px;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar .nav-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+
+    min-height: 40px;
+
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  /* ซ่อนสถานะ Demo ใน Sidebar มือถือ */
+  .sidebar-foot {
+    display: none !important;
+  }
+
+  /* เนื้อหากินพื้นที่เต็มจอ */
+  .main-area {
+    width: 100% !important;
+    min-width: 0;
+
+    margin-left: 0 !important;
+
+    min-height: 0;
+  }
+
+  .main-area>main {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .main-area>footer {
+    width: 100%;
   }
 }
