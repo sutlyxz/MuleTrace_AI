@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Python virtual environments
+.venv/
+venv/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# AWS credentials and private keys
+.aws/
+credentials
+*.pem
+*.key
+
+# Generated investigation results
+investigation/path_results.csv
+investigation/risk_results.csv
