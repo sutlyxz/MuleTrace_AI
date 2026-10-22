@@ -1,4 +1,4 @@
-﻿"""AWS Bedrock integration service for MuleTrace AI.
+"""AWS Bedrock integration service for MuleTrace AI.
 
 Provides Converse API integration, Bedrock Tool Use mapping for MuleTrace
 investigation engine functions, AI-assisted risk narrative generation, and
@@ -26,7 +26,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MODEL_ID = "amazon.nova-lite-v1:0"
 DEFAULT_REGION = "us-east-1"
 
-# Standard tool definitions for Bedrock Converse API
 BEDROCK_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "toolSpec": {
@@ -184,10 +183,7 @@ def get_bedrock_runtime_client(
     profile_name: str | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> Any:
-    """Create and return a boto3 bedrock-runtime client.
-
-    Resolves configuration in order: explicit arguments -> provided environment -> os.environ.
-    """
+    """Create and return a boto3 bedrock-runtime client."""
     if boto3 is None:
         raise RuntimeError(
             "The 'boto3' package is required to connect to AWS Bedrock. "
@@ -291,31 +287,47 @@ def generate_narrative_report(
     client: Any = None,
     max_tokens: int = 1500,
     temperature: float = 0.2,
+    language: str = "th",
 ) -> dict[str, Any]:
     """Send investigation metrics to Bedrock Converse to produce a structured narrative."""
     bedrock_client = client or get_bedrock_runtime_client()
     target_model = model_id or os.environ.get("BEDROCK_MODEL_ID") or DEFAULT_MODEL_ID
 
+    sanitized = _clean_data_for_narrative(investigation_data)
+    data_payload = json.dumps(sanitized, indent=2, ensure_ascii=False)
+
+    lang = (language or "th").strip().lower()
+    if lang == "en":
+        lang_directive = (
+            "Language Requirement: Write the entire report strictly in professional English.\n"
+            "Use clear Markdown headings (e.g. ## 1. Network Overview, ## 2. Node Topology & Routing, ## 3. Flow Velocity Patterns, ## 4. Technical Observations) "
+            "and structured bullet points."
+        )
+        user_prompt = (
+            "Provide a technical graph analysis and statistical summary of this synthetic simulation dataset in English. "
+            "Adhere strictly to technical network graph terminology (do NOT use words like 'crime', 'fraud', 'mule', or 'illegal'):\n\n"
+            f"```json\n{data_payload}\n```"
+        )
+    else:
+        lang_directive = (
+            "Language Requirement: Write the entire report strictly in formal, professional Thai language (ภาษาไทย).\n"
+            "Use clear Thai headings and natural Thai financial audit terminology. "
+            "and natural Thai financial audit terminology."
+        )
+        user_prompt = (
+            "??????????????????????????????????????????????????????????????????????????????? "
+            "??????????????????????????????? (???????????? '?????????', '??????', '???', '?????????'):\n\n"
+            f"```json\n{data_payload}\n```"
+        )
+
     system = system_prompt or (
         "You are an academic computer science and financial network researcher analyzing synthetic benchmark graph data. "
         "Synthesize an informative technical network topology report from the provided simulation metrics.\n\n"
-        "Structure your response clearly:\n"
-        "1. Network Overview (total nodes, transfer volume, and transaction frequency)\n"
-        "2. Node Topology & Routing (inflow aggregation nodes, high-velocity transit, destination dispersal)\n"
-        "3. Flow Velocity Patterns (turnaround timestamps, amount concentration)\n"
-        "4. Technical Observations for System Administrators\n\n"
+        f"{lang_directive}\n\n"
         "Strict Safety & Vocabulary Constraints:\n"
         "- This is 100% synthetic research simulation data.\n"
         "- Do NOT use the words: 'illicit', 'fraud', 'crime', 'criminal', 'mule', 'victim', 'illegal', 'stolen', 'guilt', or 'wrongdoing'.\n"
         "- Use purely mathematical and network terminology: 'fan-in pattern', 'rapid transit node', 'high-throughput routing', 'volume aggregation'."
-    )
-
-    sanitized = _clean_data_for_narrative(investigation_data)
-    data_payload = json.dumps(sanitized, indent=2, ensure_ascii=False)
-    user_prompt = (
-        "Provide a technical graph analysis and statistical summary of this synthetic simulation dataset. "
-        "Adhere strictly to technical network graph terminology (do NOT use words like 'crime', 'fraud', 'mule', or 'illegal'):\n\n"
-        f"```json\n{data_payload}\n```"
     )
 
     messages = [
@@ -345,6 +357,7 @@ def generate_narrative_report(
         "status": "success",
         "model_id": target_model,
         "narrative": text_content,
+        "language": lang,
         "stop_reason": response.get("stopReason"),
         "usage": response.get("usage", {}),
     }
@@ -354,10 +367,11 @@ def analyze_case_with_bedrock(
     case_id: str,
     model_id: str | None = None,
     client: Any = None,
+    language: str = "th",
 ) -> dict[str, Any]:
     """Score a case with MuleTrace engine and generate an AI report via Bedrock."""
     investigation = engine.score_investigation(case_id=case_id)
-    report = generate_narrative_report(investigation, model_id=model_id, client=client)
+    report = generate_narrative_report(investigation, model_id=model_id, client=client, language=language)
     return {
         "case_id": case_id,
         "score_data": investigation,
@@ -371,6 +385,7 @@ def analyze_account_with_bedrock(
     account_id: str,
     model_id: str | None = None,
     client: Any = None,
+    language: str = "th",
 ) -> dict[str, Any]:
     """Collect profile and score for an account and generate an AI report via Bedrock."""
     profile = engine.get_account_profile(account_id)
@@ -380,7 +395,7 @@ def analyze_account_with_bedrock(
         "profile": profile,
         "score": score_data,
     }
-    report = generate_narrative_report(combined, model_id=model_id, client=client)
+    report = generate_narrative_report(combined, model_id=model_id, client=client, language=language)
     return {
         "account_id": account_id,
         "profile": profile,

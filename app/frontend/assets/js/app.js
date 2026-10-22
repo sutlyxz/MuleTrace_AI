@@ -930,8 +930,12 @@ async function callAi(a, c) {
   const box = $("#aiResult");
   const button = $("#runAi");
 
-  const url =
+  let url =
     window.MULETRACE_CONFIG?.apiUrl?.trim() || "";
+
+  if (!url && typeof window !== "undefined" && window.location?.origin) {
+    url = `${window.location.origin}/api/ai/summary`;
+  }
 
   if (!url) {
     box.textContent =
@@ -968,6 +972,7 @@ async function callAi(a, c) {
       },
       body: JSON.stringify({
         case_id: c.caseId,
+        language: window.MULETRACE_I18N?.getLanguage?.() || "th",
         investigation: {
           priority_score: a.score,
           risk_level: a.risk,

@@ -695,6 +695,12 @@
         "ยังไม่เชื่อม AWS · ใช้รายงานแบบกฎได้",
         "AWS not connected · Rule-based report is available"
       );
+    } else if (!state.aiText) {
+      text(
+        "#aiResult",
+        "ระบบพร้อมเชื่อมต่อ AWS Bedrock แล้ว กดปุ่ม 'ขอ AI Summary ผ่าน API' ด้านบนเพื่อเริ่มวิเคราะห์เคสนี้",
+        "AWS Bedrock ready · Click 'Request AI Summary via API' button above to analyze this case"
+      );
     }
   }
 

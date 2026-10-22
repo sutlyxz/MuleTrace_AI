@@ -18,7 +18,7 @@ from app.backend.aws.bedrock_service import (
 )
 
 
-def run_diagnostics() -> int:
+def run_diagnostics(target_case: str = 'CASE001', target_account: str | None = None) -> int:
     print("=" * 60)
     print("       MuleTrace AI - AWS Bedrock Connection Test       ")
     print("=" * 60)
@@ -98,14 +98,21 @@ def run_diagnostics() -> int:
         usage = response.get("usage", {})
         print(f"[+] Tokens Used: {usage.get('totalTokens', 'N/A')}")
 
-        # 5. Quick AML Case Analysis Test
-        print("\n[*] Testing MuleTrace AI AML Case Analysis (CASE001)...")
-        case_report = analyze_case_with_bedrock("CASE001", model_id=model_id, client=client)
-        print("[+] Case Analysis completed successfully!")
-        narrative = case_report["ai_narrative"].strip()
-        print("\n--- AI Narrative Report Preview ---")
-        print(narrative[:600] + ("..." if len(narrative) > 600 else ""))
-        print("-----------------------------------\n")
+        # 5. AML Case / Account Analysis Test with Bedrock
+        if target_account:
+            from app.backend.aws.bedrock_service import analyze_account_with_bedrock
+            print(f"\n[*] Testing MuleTrace AI Account Analysis ({target_account})...")
+            report = analyze_account_with_bedrock(target_account, model_id=model_id, client=client)
+            print(f"[+] Account {target_account} Analysis completed successfully!")
+        else:
+            print(f"\n[*] Testing MuleTrace AI AML Case Analysis ({target_case})...")
+            report = analyze_case_with_bedrock(target_case, model_id=model_id, client=client)
+            print(f"[+] Case {target_case} Analysis completed successfully!")
+
+        narrative = report.get("ai_narrative", "").strip()
+        print("\n" + "=" * 30 + " AI REPORT " + "=" * 30)
+        print(narrative)
+        print("=" * 71 + "\n")
 
         print("=" * 60)
         print("   ALL CHECKS PASSED: Your project is connected to AWS Bedrock!  ")
@@ -133,4 +140,9 @@ def run_diagnostics() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(run_diagnostics())
+    import argparse
+    parser = argparse.ArgumentParser(description="Test AWS Bedrock connection and case analysis")
+    parser.add_argument("--case", type=str, default="CASE001", help="Case ID to analyze (default: CASE001)")
+    parser.add_argument("--account", type=str, default=None, help="Account ID to analyze (e.g. B782)")
+    args = parser.parse_args()
+    sys.exit(run_diagnostics(target_case=args.case, target_account=args.account))

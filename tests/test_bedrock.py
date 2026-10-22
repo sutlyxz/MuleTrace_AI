@@ -140,6 +140,16 @@ class TestBedrockReporting(unittest.TestCase):
         self.assertIn("High risk mule account detected", response["narrative"])
         self.assertEqual(response["usage"]["totalTokens"], 200)
 
+    def test_generate_narrative_report_thai_and_english(self):
+        sample_data = {"score": 85, "priority": "CRITICAL", "account_id": "B782"}
+        generate_narrative_report(sample_data, client=self.mock_client, language="th")
+        call_args_th = self.mock_client.converse.call_args[1]
+        self.assertIn("ภาษาไทย", call_args_th["system"][0]["text"])
+
+        generate_narrative_report(sample_data, client=self.mock_client, language="en")
+        call_args_en = self.mock_client.converse.call_args[1]
+        self.assertIn("English", call_args_en["system"][0]["text"])
+
     def test_analyze_case_with_bedrock(self):
         result = analyze_case_with_bedrock("CASE001", client=self.mock_client)
         self.assertEqual(result["case_id"], "CASE001")
