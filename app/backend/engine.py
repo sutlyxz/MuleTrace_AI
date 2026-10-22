@@ -443,6 +443,20 @@ def score_investigation(case_id: str | None = None, account_id: str | None = Non
     }
 
 
+def summarize_case_with_ai(case_id: str, model_id: str | None = None) -> dict[str, Any]:
+    """Generate an AI-assisted narrative report for an investigation case using AWS Bedrock."""
+    from .aws.bedrock_service import analyze_case_with_bedrock
+
+    return analyze_case_with_bedrock(case_id=case_id, model_id=model_id)
+
+
+def summarize_account_with_ai(account_id: str, model_id: str | None = None) -> dict[str, Any]:
+    """Generate an AI-assisted narrative report for an account using AWS Bedrock."""
+    from .aws.bedrock_service import analyze_account_with_bedrock
+
+    return analyze_account_with_bedrock(account_id=account_id, model_id=model_id)
+
+
 def health_check() -> dict[str, Any]:
     """Quick check for data files and exposed tool functions."""
     return {
@@ -452,7 +466,7 @@ def health_check() -> dict[str, Any]:
         "available_tools": [
             "get_account_profile", "get_transaction_history", "expand_network",
             "detect_risk", "trace_money", "get_evidence",
-            "search_previous_cases", "find_cross_case_links", "score_investigation",
+            "search_previous_cases", "find_cross_case_links", "score_investigation", "summarize_case_with_ai", "summarize_account_with_ai",
         ],
     }
 
