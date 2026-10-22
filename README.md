@@ -53,3 +53,17 @@ MuleTrace_AI/
 5. Run tests before submitting changes.
 
 Setup commands and dependencies will be documented once the team confirms the project's Python environment and libraries.
+
+## Database (PostgreSQL / Amazon RDS)
+
+The investigation engine reads CSV files by default. To use PostgreSQL
+(local or Amazon RDS) set `MULETRACE_DATA_BACKEND=postgres` and `DATABASE_URL`
+in a git-ignored `.env` (see `.env.example`), then:
+
+```powershell
+python -m pip install -r requirements.txt
+alembic upgrade head
+python -m db.seed
+```
+
+Full guide: [`docs/database.md`](docs/database.md).

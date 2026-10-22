@@ -24,3 +24,12 @@ investigation/risk_results.csv
 # Generated auto alerts
 data/alerts.json
 data/alerts.backup.json
+
+# Database / tooling artifacts (never commit dumps or local DB files)
+*.db
+*.sqlite3
+*.dump
+*.sql.gz
+pgpass.conf
+.pgpass
+.pytest_cache/
