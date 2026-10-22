@@ -5,11 +5,15 @@ layer. It uses the project's existing investigation rules and tracing code.
 All results are investigation leads, not proof of wrongdoing.
 
 Expected project layout:
-    app/backend/engine.py
-    app/data/transactions.csv
-    app/data/case_accounts.csv
-    app/backend/core/risk_rules.py
-    app/backend/core/tracing.py
+    engine.py
+    data/transactions.csv
+    data/case_accounts.csv
+    investigation/risk_rules.py
+    investigation/tracing.py
+
+Data backend (env MULETRACE_DATA_BACKEND):
+    csv       (default) read the CSV files above
+    postgres  read the same data from PostgreSQL / Amazon RDS via DATABASE_URL
 """
 from __future__ import annotations
 
@@ -26,6 +30,12 @@ from .core.risk_rules import (
     find_case_overlap,
 )
 from .core.tracing import find_paths
+from app.backend.db.config import (
+    data_backend,
+    dataset_name,
+    get_transactions_path,
+    get_accounts_path,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -76,14 +86,18 @@ def _json_safe(value: Any) -> Any:
 
 
 def load_transactions() -> pd.DataFrame:
-    """Load and validate transaction data from data/transactions.csv."""
-    if not TRANSACTIONS_FILE.exists():
-        raise FileNotFoundError(f"Transaction data not found: {TRANSACTIONS_FILE}")
-
-    df = pd.read_csv(TRANSACTIONS_FILE)
+    """Load and validate transaction data (CSV or PostgreSQL backend)."""
+    if data_backend() == "postgres":
+        from app.backend.db.repositories import TransactionRepository  # lazy: optional dependency
+        df = TransactionRepository().as_dataframe()
+    else:
+        tx_file = get_transactions_path()
+        if not tx_file.exists():
+            raise FileNotFoundError(f"Transaction data not found: {tx_file}")
+        df = pd.read_csv(tx_file)
     missing = REQUIRED_TRANSACTION_COLUMNS - set(df.columns)
     if missing:
-        raise ValueError(f"transactions.csv is missing columns: {sorted(missing)}")
+        raise ValueError(f"transactions file is missing columns: {sorted(missing)}")
 
     df = df.copy()
     for column in ("transaction_id", "source_account", "target_account"):
@@ -110,11 +124,32 @@ def load_transactions() -> pd.DataFrame:
     return df.sort_values(["timestamp", "transaction_id"]).reset_index(drop=True)
 
 
+def load_accounts() -> pd.DataFrame:
+    """Load and validate account summary data from the active accounts CSV."""
+    accounts_file = get_accounts_path()
+    if not accounts_file.exists():
+        return pd.DataFrame(columns=["account_id", "incoming_count", "outgoing_count", "total_incoming", "total_outgoing"])
+    df = pd.read_csv(accounts_file)
+    required = {"account_id", "incoming_count", "outgoing_count", "total_incoming", "total_outgoing"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"accounts file is missing columns: {sorted(missing)}")
+    df = df.copy()
+    df["account_id"] = df["account_id"].astype(str).str.strip()
+    for col in ("incoming_count", "outgoing_count", "total_incoming", "total_outgoing"):
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    return df.sort_values("account_id").reset_index(drop=True)
+
+
 def load_case_accounts() -> pd.DataFrame:
     """Load the synthetic case/account links; return an empty frame if absent."""
-    if not CASE_ACCOUNTS_FILE.exists():
-        return pd.DataFrame(columns=["case_id", "account_id"])
-    df = pd.read_csv(CASE_ACCOUNTS_FILE, dtype="string")
+    if data_backend() == "postgres":
+        from app.backend.db.repositories import CaseRepository  # lazy: optional dependency
+        df = CaseRepository().as_dataframe()
+    else:
+        if not CASE_ACCOUNTS_FILE.exists():
+            return pd.DataFrame(columns=["case_id", "account_id"])
+        df = pd.read_csv(CASE_ACCOUNTS_FILE, dtype="string")
     required = {"case_id", "account_id"}
     missing = required - set(df.columns)
     if missing:
@@ -167,20 +202,14 @@ def get_evidence(transaction_ids: str | Iterable[str]) -> dict[str, Any]:
 
 
 def _all_risk_findings() -> pd.DataFrame:
-    """Run the project's existing risk rules and combine their findings."""
+    """Run primary transaction risk rules (multiple_incoming, rapid_outgoing, high_value_transfer)."""
     transactions = load_transactions()
-    case_accounts = load_case_accounts()
     frames: list[pd.DataFrame] = []
 
     for detector in (find_multiple_incoming, find_rapid_outgoing, find_high_value_transfers):
         result = detector(transactions.copy())
         if isinstance(result, pd.DataFrame) and not result.empty:
             frames.append(result.copy())
-
-    if not case_accounts.empty:
-        overlap_result = find_case_overlap(case_accounts.copy())
-        if isinstance(overlap_result, pd.DataFrame) and not overlap_result.empty:
-            frames.append(overlap_result.copy())
 
     if not frames:
         return pd.DataFrame(columns=["account_id", "rule", "evidence", "transaction_ids", "reason"])
@@ -195,7 +224,9 @@ def _all_risk_findings() -> pd.DataFrame:
 
 
 def detect_risk(account_id: str | None = None) -> dict[str, Any]:
-    """Run R001/R002/R004 and cross-case R005; optionally filter by account."""
+    """Run transaction risk rules (multiple_incoming, rapid_outgoing, high_value_transfer);
+    optionally filter by account.
+    """
     findings = _all_risk_findings()
     if account_id is not None:
         account_id = _clean_id(account_id)
@@ -405,16 +436,31 @@ def score_investigation(case_id: str | None = None, account_id: str | None = Non
                 "disclaimer": "This is a triage heuristic, not a probability or finding of wrongdoing.",
             }
 
-    findings = _all_risk_findings()
+    tx_findings = _all_risk_findings()
     if target_accounts:
-        findings = findings[findings["account_id"].astype(str).isin(target_accounts)]
+        tx_findings = tx_findings[tx_findings["account_id"].astype(str).isin(target_accounts)]
+
+    # Cross-case overlap is calculated separately from transaction-risk findings
+    cases = load_case_accounts()
+    has_cross_case = False
+    cross_case_count = 0
+    if not cases.empty:
+        case_overlap = find_case_overlap(cases)
+        if not case_overlap.empty:
+            matched_overlap = case_overlap[case_overlap["account_id"].astype(str).isin(target_accounts)]
+            cross_case_count = len(matched_overlap)
+            has_cross_case = cross_case_count > 0
+
     weights = {
         "multiple_incoming": 35,
         "rapid_outgoing": 30,
         "high_value_transfer": 20,
         "cross_case_overlap": 25,
     }
-    rule_names = set(findings.get("rule", pd.Series(dtype=str)).dropna().astype(str))
+    rule_names = set(tx_findings.get("rule", pd.Series(dtype=str)).dropna().astype(str))
+    if has_cross_case:
+        rule_names.add("cross_case_overlap")
+
     reasons = []
     score = 0
     for rule, points in weights.items():
@@ -425,9 +471,12 @@ def score_investigation(case_id: str | None = None, account_id: str | None = Non
     priority = "High" if score >= 70 else "Medium" if score >= 35 else "Low"
 
     tx_ids: list[str] = []
-    for value in findings.get("transaction_ids", pd.Series(dtype=object)).tolist():
+    for value in tx_findings.get("transaction_ids", pd.Series(dtype=object)).tolist():
         tx_ids.extend(_transaction_ids(value))
     tx_ids = list(dict.fromkeys(tx_ids))
+
+    total_finding_count = int(len(tx_findings)) + cross_case_count
+
     return {
         "case_id": case_id,
         "account_id": account_id,
@@ -436,7 +485,7 @@ def score_investigation(case_id: str | None = None, account_id: str | None = Non
         "priority": priority,
         "rule_types_matched": sorted(rule_names),
         "reasons": reasons or ["No configured risk rules matched this scope."],
-        "finding_count": int(len(findings)),
+        "finding_count": total_finding_count,
         "evidence_transaction_ids": tx_ids,
         "evidence": get_evidence(tx_ids)["transactions"] if tx_ids else [],
         "disclaimer": "This is a triage heuristic, not a probability or finding of wrongdoing. A human investigator must review the underlying evidence.",
@@ -458,22 +507,42 @@ def summarize_account_with_ai(account_id: str, model_id: str | None = None) -> d
 
 
 def health_check() -> dict[str, Any]:
-    """Quick check for data files and exposed tool functions."""
-    return {
-        "status": "ok" if TRANSACTIONS_FILE.exists() else "missing_data",
-        "transactions_file_exists": TRANSACTIONS_FILE.exists(),
+    """Quick check for data files/database and exposed tool functions."""
+    backend = data_backend()
+    current_dataset = dataset_name()
+    tx_file = get_transactions_path()
+    status = "ok" if (tx_file.exists() if backend == "csv" else True) else "missing_data"
+    database: dict[str, Any] | None = None
+    if backend == "postgres":
+        try:
+            from app.backend.db.repositories import TransactionRepository
+            count = TransactionRepository().count()
+            database = {"reachable": True, "transaction_count": count}
+            status = "ok" if count > 0 else "missing_data"
+        except Exception as exc:  # report, never raise, from a health probe
+            database = {"reachable": False, "error": type(exc).__name__}
+            status = "database_unavailable"
+    result = {
+        "status": status,
+        "transactions_file_exists": tx_file.exists(),
         "case_accounts_file_exists": CASE_ACCOUNTS_FILE.exists(),
         "available_tools": [
             "get_account_profile", "get_transaction_history", "expand_network",
             "detect_risk", "trace_money", "get_evidence",
             "search_previous_cases", "find_cross_case_links", "score_investigation", "summarize_case_with_ai", "summarize_account_with_ai",
         ],
+        "data_backend": backend,
+        "dataset": current_dataset,
     }
+    if database is not None:
+        result["database"] = database
+    return result
 
 
 if __name__ == "__main__":
     print(health_check())
-    if TRANSACTIONS_FILE.exists():
+    tx_file = get_transactions_path()
+    if data_backend() == "postgres" or tx_file.exists():
         print(f"Loaded transactions: {len(load_transactions())}")
         risk_summary = detect_risk()
         print(f"Risk findings: {risk_summary['count']}")
