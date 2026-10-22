@@ -17,8 +17,21 @@ credentials
 *.pem
 *.key
 
-# Generated auto alerts
+# Generated auto alerts and investigation results
 app/data/alerts.json
 app/data/alerts.backup.json
 app/backend/core/path_results.csv
 app/backend/core/risk_results.csv
+
+# Database / tooling artifacts (never commit dumps or local DB files)
+*.db
+*.sqlite3
+*.dump
+*.sql.gz
+pgpass.conf
+.pgpass
+.pytest_cache/
+
+# IDE / editor settings
+.vscode/
+.idea/

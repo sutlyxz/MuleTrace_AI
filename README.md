@@ -16,13 +16,17 @@ MuleTrace_AI/
 │   │   └── sw.js       # Service Worker kept at the frontend root
 │   ├── backend/
 │   │   ├── engine.py   # Public investigation facade
+│   │   ├── config.py   # Private environment loader and runtime settings
 │   │   ├── core/       # Risk rules and tracing algorithms
+│   │   ├── db/         # PostgreSQL models, repositories, session & seed
 │   │   ├── services/   # Alert persistence and orchestration
 │   │   ├── workers/    # Background scanner entry point
 │   │   └── aws/        # Reserved AWS integration placeholder
-│   └── data/           # CSV input and generated alerts
+│   └── data/           # Canonical synthetic CSV dataset and alerts
+├── migrations/         # Alembic database schema migrations
 ├── tests/              # Python unit tests
-├── docs/               # Architecture and run instructions
+├── docs/               # Architecture, database, and run instructions
+├── alembic.ini         # Database migration configuration
 ├── Dockerfile
 ├── compose.yaml
 ├── requirements.txt

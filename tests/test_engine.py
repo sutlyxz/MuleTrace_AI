@@ -22,9 +22,24 @@ class TestEngine(unittest.TestCase):
         self.assertEqual(result["count"], 13)
 
     def test_detect_risk(self):
+        # Canonical dataset: B782 has 1 multiple_incoming burst (TX0030-TX0039 in 9m)
+        # and 2 high_value_transfer fallback findings (TX0041, TX0042).
+        # Cross-case overlap is separated from detect_risk to investigation scoring.
         result = engine.detect_risk("B782")
-        self.assertEqual(result["count"], 4)
-        self.assertTrue(result["findings"])
+        self.assertEqual(result["count"], 3)
+        self.assertEqual(len(result["findings"]), 3)
+        for f in result["findings"]:
+            self.assertEqual(f["account_id"], "B782")
+        rules = {f["rule"] for f in result["findings"]}
+        self.assertEqual(rules, {"high_value_transfer", "multiple_incoming"})
+
+        mi_finding = next(f for f in result["findings"] if f["rule"] == "multiple_incoming")
+        self.assertEqual(mi_finding["evidence"], 10.0)
+
+        hvt_findings = [f for f in result["findings"] if f["rule"] == "high_value_transfer"]
+        self.assertEqual(len(hvt_findings), 2)
+        hvt_txs = {f["transaction_ids"] for f in hvt_findings}
+        self.assertEqual(hvt_txs, {"TX0041", "TX0042"})
 
     def test_evidence(self):
         result = engine.get_evidence("TX0041")
