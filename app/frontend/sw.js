@@ -1,8 +1,7 @@
-
-// Service Worker: เก็บเฉพาะไฟล์ Demo
+﻿// Service Worker: เก็บเฉพาะไฟล์ Demo
 // ไม่เก็บคำตอบจาก AWS API
 
-const CACHE_NAME = "muletrace-v3";
+const CACHE_NAME = "muletrace-v7";
 
 const FILES = [
   "./",
