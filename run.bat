@@ -1,47 +1,68 @@
 @echo off
+setlocal
 chcp 65001 >nul
 title MuleTrace AI Launcher
-echo ====================================================
-echo        กำลังเริ่มการทำงาน MuleTrace AI...
-echo ====================================================
-echo.
+pushd "%~dp0"
+if errorlevel 1 exit /b 1
 
-REM ตรวจสอบ live-server
-where live-server >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo [✓] ตรวจพบ Live Server: กำลังเปิดระบบพร้อมโหมด Real-time Reload...
-    live-server app\frontend
-    goto end
+if /i "%~1"=="docker" goto docker
+set "LAUNCH_ARGS="
+if "%~1"=="" goto python
+if /i "%~1"=="--help" (
+    set "LAUNCH_ARGS=--help"
+    goto python
+)
+if /i "%~1"=="--no-browser" (
+    set "LAUNCH_ARGS=--no-browser"
+    goto python
+)
+echo [ERROR] Usage: run.bat [docker / --help / --no-browser]
+set "RESULT=1"
+goto cleanup
+
+:python
+
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -c "import sys; sys.exit(sys.version_info < (3, 11))" >nul 2>&1
+    if not errorlevel 1 goto venv
 )
 
-REM ตรวจสอบ Python (py launcher)
-where py >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo [✓] ตรวจพบ Python: กำลังเปิดระบบที่ http://localhost:8000...
-    start http://localhost:8000
-    py -m http.server 8000 --bind 127.0.0.1 --directory app\frontend
-    goto end
+for %%P in (python py python3 python3.14 python3.13 python3.12 python3.11) do (
+    %%P -c "import sys; sys.exit(sys.version_info < (3, 11))" >nul 2>&1
+    if not errorlevel 1 (
+        %%P -m scripts.run %LAUNCH_ARGS%
+        goto finished
+    )
 )
 
-REM ตรวจสอบ Python ปกติ
-where python >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo [✓] ตรวจพบ Python: กำลังเปิดระบบที่ http://localhost:8000...
-    start http://localhost:8000
-    python -m http.server 8000 --bind 127.0.0.1 --directory app\frontend
-    goto end
+echo [ERROR] Install Python 3.11+ or use run.bat docker with Docker Desktop.
+set "RESULT=1"
+goto cleanup
+
+:venv
+".venv\Scripts\python.exe" -m scripts.run %LAUNCH_ARGS%
+goto finished
+
+:docker
+where docker >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Docker is not installed. Install and start Docker Desktop.
+    set "RESULT=1"
+    goto cleanup
 )
-
-REM ตรวจสอบ npx
-where npx >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo [✓] ตรวจพบ Node.js (npx): กำลังเปิดระบบ...
-    npx live-server app\frontend
-    goto end
+if not exist ".env" (
+    copy /b ".env.example" ".env" >nul
+    if errorlevel 1 (
+        set "RESULT=1"
+        goto cleanup
+    )
 )
+docker compose --profile analysis up --build --force-recreate
 
-echo [X] ไม่พบโปรแกรมสำหรับรันเว็บเซิร์ฟเวอร์ (Live Server / Python / Node.js)
-echo กรุณาเปิดไฟล์ app\frontend\index.html ผ่านเบราว์เซอร์โดยตรง
-pause
+:finished
+set "RESULT=%ERRORLEVEL%"
 
-:end
+:cleanup
+popd
+if not "%RESULT%"=="0" pause
+exit /b %RESULT%

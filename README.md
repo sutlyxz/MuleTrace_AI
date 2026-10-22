@@ -47,7 +47,22 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m app.backend.workers.auto_scanner --once
 ```
 
-Windows users can also run `run.bat` for the frontend demo.
+Windows users can run `run.bat` to start the frontend together with the local scanner.
+
+## One-command startup
+
+Run `run.bat` from any folder or double-click it from Explorer. It resolves the project root,
+creates `.env` from `.env.example` only when `.env` is missing, refreshes the project `.venv`
+when `requirements.txt` changes, and starts the frontend plus the CSV scanner. Changing source
+files or `.env` is picked up on the next `run.bat` invocation; the scanner continues watching
+CSV data while it is running.
+
+Use `run.bat --no-browser` to leave the browser closed, or `run.bat --help` for usage.
+Press Ctrl+C to stop both local services before starting them again. The first run needs
+internet access and enough space for `.venv`; later runs reuse installed dependencies.
+
+Use `run.bat docker` for Docker mode. It creates `.env` when needed, rebuilds with `--build`,
+and recreates the frontend and scanner containers so added or changed files are included.
 
 ## Run with Docker
 
@@ -65,6 +80,16 @@ docker compose --profile analysis up --build
 ```
 
 The scanner writes generated alerts to `app/data/alerts.json` through the mounted data directory.
+
+## Private keys and AWS
+
+Keep local/private values in the root `.env`, which is ignored by Git and excluded from Docker
+build context. The current demo does not require any key. If a future feature uses AWS, add its
+backend-only variables there (for example `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and
+`AWS_SECRET_ACCESS_KEY`, plus `AWS_SESSION_TOKEN` for temporary credentials); never put them
+in `app/frontend/assets/js/config.js`, HTML, CSS, or the browser environment. `run.bat` passes
+private variables only to the backend scanner. Adding keys does not enable an AWS integration:
+the current application still runs locally, without calling AWS.
 
 ## Verification
 

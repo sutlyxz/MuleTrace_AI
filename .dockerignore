@@ -11,5 +11,6 @@ data/alerts.json
 data/alerts.backup.json
 app/data/alerts.json
 app/data/alerts.backup.json
+scripts
 tests
 docs

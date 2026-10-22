@@ -32,4 +32,8 @@ The frontend is intentionally static and can run without the backend. The backen
 - `workers/auto_scanner.py` watches CSV changes and invokes the alert service.
 - `aws/` remains an empty integration placeholder, not a required runtime service.
 
+Private configuration belongs to the repository-root `.env`. The launcher gives public settings
+to the frontend server and private settings only to backend workers. The browser never receives
+AWS keys or other private variables.
+
 Run Python entry points as modules from the project root, for example `python -m app.backend.workers.auto_scanner --once`.

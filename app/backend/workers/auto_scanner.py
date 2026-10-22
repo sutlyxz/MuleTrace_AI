@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 import time
 
@@ -31,8 +32,8 @@ def main() -> None:
                         help='Seconds between checks (default: 3)')
     parser.add_argument('--once', action='store_true', help='Scan once and exit')
     args = parser.parse_args()
-    if args.interval <= 0:
-        parser.error('--interval must be greater than zero')
+    if not math.isfinite(args.interval) or args.interval <= 0:
+        parser.error('--interval must be a positive finite number')
 
     last_signature = None
     print('MuleTrace Auto Alert scanner started (Ctrl+C to stop)', flush=True)
