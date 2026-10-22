@@ -5,11 +5,11 @@ layer. It uses the project's existing investigation rules and tracing code.
 All results are investigation leads, not proof of wrongdoing.
 
 Expected project layout:
-    engine.py
-    data/transactions.csv
-    data/case_accounts.csv
-    investigation/risk_rules.py
-    investigation/tracing.py
+    app/backend/engine.py
+    app/data/transactions.csv
+    app/data/case_accounts.csv
+    app/backend/core/risk_rules.py
+    app/backend/core/tracing.py
 """
 from __future__ import annotations
 
@@ -19,16 +19,16 @@ import math
 
 import pandas as pd
 
-from investigation.risk_rules import (
+from .core.risk_rules import (
     find_high_value_transfers,
     find_multiple_incoming,
     find_rapid_outgoing,
     find_case_overlap,
 )
-from investigation.tracing import find_paths
+from .core.tracing import find_paths
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TRANSACTIONS_FILE = PROJECT_ROOT / "data" / "transactions.csv"
 CASE_ACCOUNTS_FILE = PROJECT_ROOT / "data" / "case_accounts.csv"
 REQUIRED_TRANSACTION_COLUMNS = {

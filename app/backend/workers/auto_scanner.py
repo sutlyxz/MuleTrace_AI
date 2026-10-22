@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import time
 
-from investigation.alert_service import PROJECT_ROOT, scan_risk_alerts
+from ..services.alert_service import PROJECT_ROOT, scan_risk_alerts
 
 WATCHED_FILES = (
     PROJECT_ROOT / 'data' / 'transactions.csv',

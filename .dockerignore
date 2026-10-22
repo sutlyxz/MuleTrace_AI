@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.py[cod]
+*.tmp
+*.log
+data/alerts.json
+data/alerts.backup.json
+app/data/alerts.json
+app/data/alerts.backup.json
+tests
+docs

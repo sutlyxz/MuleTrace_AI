@@ -7,8 +7,8 @@ import types
 import unittest
 from unittest.mock import patch
 
-from investigation.alert_service import alert_id, load_alerts, scan_risk_alerts
-from investigation.auto_scanner import signature
+from app.backend.services.alert_service import alert_id, load_alerts, scan_risk_alerts
+from app.backend.workers.auto_scanner import signature
 
 
 class AlertTests(unittest.TestCase):
@@ -24,9 +24,9 @@ class AlertTests(unittest.TestCase):
         }
 
     def _scan(self, findings):
-        fake = types.ModuleType('engine')
+        fake = types.ModuleType('app.backend.engine')
         fake.detect_risk = lambda: {'count': len(findings), 'findings': findings}
-        with patch.dict(sys.modules, {'engine': fake}):
+        with patch.dict(sys.modules, {'app.backend.engine': fake}):
             return scan_risk_alerts(self.path)
 
     def test_first_scan_creates_alert(self):

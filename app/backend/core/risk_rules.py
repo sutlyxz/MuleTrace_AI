@@ -2,7 +2,7 @@ import pandas as pd
 from pathlib import Path
 
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "transactions.csv"
+DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "transactions.csv"
 
 
 def load_transactions(csv_path=DATA_FILE):
@@ -210,7 +210,7 @@ def main():
     high_value = find_high_value_transfers(df, threshold=50000)
 
     # R005: Cross-Case Account Overlap
-    case_file = Path(__file__).resolve().parent.parent / "data" / "case_accounts.csv"
+    case_file = Path(__file__).resolve().parents[2] / "data" / "case_accounts.csv"
 
     if case_file.exists():
         case_df = pd.read_csv(case_file)

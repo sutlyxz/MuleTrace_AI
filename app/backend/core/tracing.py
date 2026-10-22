@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "transactions.csv"
+DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "transactions.csv"
 
 
 def load_transactions(csv_path=DATA_FILE):

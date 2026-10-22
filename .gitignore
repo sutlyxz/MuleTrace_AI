@@ -17,10 +17,8 @@ credentials
 *.pem
 *.key
 
-# Generated investigation results
-investigation/path_results.csv
-investigation/risk_results.csv
-
 # Generated auto alerts
-data/alerts.json
-data/alerts.backup.json
+app/data/alerts.json
+app/data/alerts.backup.json
+app/backend/core/path_results.csv
+app/backend/core/risk_results.csv

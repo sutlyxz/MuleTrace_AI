@@ -2,7 +2,7 @@
 import unittest
 import pandas as pd
 
-from investigation.tracing import find_paths
+from app.backend.core.tracing import find_paths
 
 
 class TestTracing(unittest.TestCase):

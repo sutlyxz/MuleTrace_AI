@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f7f5f1">
+  <meta name="description" content="MuleTrace AI investigation prototype">
+
+  <title>MuleTrace AI | Investigation Workspace</title>
+
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/case-manager.css">
+
+
+  <script src="assets/js/data.js" defer></script>
+  <script src="assets/js/config.js" defer></script>
+  <script src="assets/js/i18n.js" defer></script>
+  <script src="assets/js/api.js" defer></script>
+  <script src="assets/js/app.js" defer></script>
+  <script src="assets/js/case-manager.js" defer></script>
+</head>
+
+<body>
+  <div class="shell">
+
+    <!-- เมนูด้านซ้าย -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">M</span>
+        <span>
+          MuleTrace <b>AI</b>
+          <small>INVESTIGATION INTELLIGENCE</small>
+        </span>
+      </div>
+
+      <p class="nav-label">WORKSPACE</p>
+
+      <nav aria-label="หน้าหลัก">
+        <button class="nav-item active" data-page="overview">
+          ▦ <span>Overview</span>
+        </button>
+        <button class="nav-item" data-page="cases">
+          ▤ <span>Case Queue</span>
+        </button>
+        <button class="nav-item" data-page="trail">
+          ◎ <span>Money Trail</span>
+        </button>
+        <button class="nav-item" data-page="investigation">
+          ◇ <span>Investigation</span>
+        </button>
+        <button class="nav-item" data-page="report">
+          ▣ <span>Evidence & Report</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <span class="status-dot"></span>
+        Demo mode active
+        <small>
+          Synthetic data only · No live banking connection
+        </small>
+      </div>
+    </aside>
+
+    <div class="main-area">
+
+      <!-- แถบด้านบน -->
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">
+            FINANCIAL INVESTIGATION / COMMAND CENTER
+          </span>
+          <h1 id="pageTitle">Overview</h1>
+        </div>
+
+        <div class="language-switch" role="group" aria-label="Choose language">
+          <button type="button" data-lang="th" class="active">
+            TH
+          </button>
+          <button type="button" data-lang="en">
+            EN
+          </button>
+        </div>
+
+        <div class="header-actions">
+          <span class="mode-badge">● DEMO DATA</span>
+
+          <label class="case-select-label" for="caseSelect">
+            CASE
+          </label>
+
+          <select id="caseSelect" aria-label="เลือกเคส"></select>
+        </div>
+      </header>
+
+      <main>
+
+        <!-- หน้าที่ 1: Overview -->
+        <section class="page active" id="page-overview">
+
+          <div class="intro">
+            <div>
+              <p class="eyebrow">MULETRACE AI</p>
+              <h2>
+                Trace the Money.<br>
+                Connect the Evidence.
+              </h2>
+              <p>
+                เปลี่ยน Fraud Alert ให้เป็นเส้นทางการสืบสวน
+                ที่ตรวจสอบหลักฐานย้อนกลับได้
+              </p>
+            </div>
+
+            <button class="btn primary" data-go="investigation">
+              เริ่มสืบสวน ↗
+            </button>
+          </div>
+
+          <div class="metrics" id="metrics"></div>
+
+          <div class="two-col">
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">ALERT MANAGEMENT</p>
+                  <h3>Case Queue</h3>
+                </div>
+                <button class="text-btn" data-go="cases">
+                  ดูทั้งหมด →
+                </button>
+              </div>
+
+              <div id="overviewCases"></div>
+            </section>
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">NETWORK SNAPSHOT</p>
+                  <h3>Current Case</h3>
+                </div>
+
+                <span class="soft-pill" id="overviewRisk">—</span>
+              </div>
+
+              <div class="snapshot" id="snapshot"></div>
+
+              <button class="btn subtle full" data-go="trail">
+                เปิด Money Trail →
+              </button>
+            </section>
+          </div>
+        </section>
+
+        <!-- หน้าที่ 2: Case Queue -->
+        <section class="page" id="page-cases" hidden>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">FRAUD ALERTS</p>
+              <h2>Investigation Queue</h2>
+            </div>
+
+            <span class="soft-pill">
+              จัดลำดับเพื่อให้เจ้าหน้าที่ตรวจต่อ
+            </span>
+          </div>
+
+          <div class="panel">
+            <div id="allCases"></div>
+          </div>
+        </section>
+
+        <!-- หน้าที่ 3: Money Trail -->
+        <section class="page" id="page-trail" hidden>
+
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">TRANSACTION INTELLIGENCE</p>
+              <h2>Multi-Hop Money Trail</h2>
+            </div>
+
+            <span class="soft-pill">
+              คลิกบัญชีหรือเส้นธุรกรรม
+            </span>
+          </div>
+
+          <div class="panel">
+            <div class="controls">
+              <label>
+                Network depth
+                <select id="hopSelect">
+                  <option value="1">1 hop</option>
+                  <option value="2">2 hops</option>
+                  <option value="3" selected>3 hops</option>
+                </select>
+              </label>
+
+              <button id="resetReplay" class="btn subtle">
+                แสดงทั้งหมด
+              </button>
+            </div>
+
+            <div class="graph-container">
+              <svg id="moneyGraph" viewBox="0 0 850 460" role="img" aria-label="กราฟเครือข่ายธุรกรรม">
+              </svg>
+            </div>
+
+            <div class="legend">
+              <span><i class="dot target"></i>บัญชีเป้าหมาย</span>
+              <span><i class="dot flagged"></i>บัญชีที่ถูก Flag</span>
+              <span><i class="dot watch"></i>บัญชี Watch</span>
+              <span><i class="dot normal"></i>บัญชีอื่น</span>
+            </div>
+          </div>
+
+          <div class="two-col">
+
+            <section class="panel">
+              <div class="section-head">
+                <h3>Time Replay</h3>
+                <span class="soft-pill" id="replayCount">—</span>
+              </div>
+
+              <label for="replayRange" class="field-label">
+                เลื่อนเพื่อแสดงธุรกรรมตามลำดับเวลา
+              </label>
+
+              <input type="range" min="0" max="10" value="10" id="replayRange">
+
+              <p class="helper" id="replayTime"></p>
+            </section>
+
+            <section class="panel">
+              <div class="section-head">
+                <h3>Selected Transaction</h3>
+                <span class="soft-pill" id="selectedTxTag">—</span>
+              </div>
+
+              <div id="transactionDetail"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="section-head">
+              <h3>Transaction Records</h3>
+              <span class="helper">
+                เลือกแถวเพื่อเน้นเส้นทาง
+              </span>
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>From → To</th>
+                    <th>Amount</th>
+                    <th>Date / Time</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <!-- หน้าที่ 4: Investigation -->
+        <section class="page" id="page-investigation" hidden>
+
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">INVESTIGATION WORKSPACE</p>
+              <h2 id="investigationHeading">
+                Case investigation
+              </h2>
+            </div>
+            <span class="soft-pill" id="priorityLabel">—</span>
+          </div>
+
+          <div class="two-col">
+            <section class="panel">
+              <h3>Investigation Summary</h3>
+              <div id="caseSummary"></div>
+
+              <p class="disclaimer">
+                Priority Score เป็นคะแนนจัดลำดับการตรวจสอบ
+                ไม่ใช่โอกาสกระทำผิด และไม่ใช่การตัดสินความผิด
+              </p>
+            </section>
+
+            <section class="panel">
+              <div class="section-head">
+                <h3>Tool Activity</h3>
+                <span class="soft-pill">RULE-BASED DEMO</span>
+              </div>
+
+              <ol class="steps" id="toolSteps"></ol>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="section-head">
+              <h3>Recommended Next Accounts</h3>
+              <button class="text-btn" data-go="trail">
+                ดูกราฟ →
+              </button>
+            </div>
+
+            <div id="recommendedAccounts" class="chips"></div>
+          </section>
+        </section>
+
+        <!-- หน้าที่ 5: Evidence & Report -->
+        <section class="page" id="page-report" hidden>
+
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">EXPLAINABLE INVESTIGATION</p>
+              <h2>Evidence Chain & Report</h2>
+            </div>
+
+            <button class="btn primary" id="downloadReport">
+              ↓ ดาวน์โหลดรายงาน
+            </button>
+          </div>
+
+          <section class="panel">
+            <div class="section-head">
+              <h3>Evidence Chain</h3>
+              <span class="helper">
+                อ้างอิง Transaction ID จากข้อมูลจำลอง
+              </span>
+            </div>
+
+            <div id="evidenceList" class="evidence-list"></div>
+          </section>
+
+          <div class="two-col">
+            <section class="panel">
+              <h3>Cross-Case Connections</h3>
+              <div id="crossCases"></div>
+            </section>
+
+            <section class="panel">
+              <div class="section-head">
+                <h3>AWS Agent Handoff</h3>
+                <span class="soft-pill" id="awsStatus">
+                  NOT CONNECTED
+                </span>
+              </div>
+
+              <p class="helper">
+                พื้นที่รอรับผลจริงจาก Backend ของเพื่อน
+                ไม่ได้เรียก Bedrock อัตโนมัติ
+              </p>
+
+              <button class="btn subtle" id="runAi">
+                ขอ AI Summary ผ่าน API
+              </button>
+
+              <div id="aiResult" class="ai-result" aria-live="polite">
+                ยังไม่ได้เชื่อม AWS · ใช้รายงานแบบ Rule-based ได้
+              </div>
+            </section>
+          </div>
+        </section>
+
+      </main>
+
+      <footer>
+        MuleTrace AI · Hackathon Prototype ·
+        Synthetic Data Only · Human Review Required
+      </footer>
+    </div>
+  </div>
+
+
+  <script>
+    // Keep the language switch inside
+    // the right-side header actions group.
+    document.addEventListener("DOMContentLoaded", () => {
+      const headerActions =
+        document.querySelector(".header-actions");
+
+      const languageSwitch =
+        document.querySelector(".language-switch");
+
+      if (headerActions && languageSwitch) {
+        headerActions.prepend(languageSwitch);
+      }
+    });
+  </script>
+
+</body>
+</html>

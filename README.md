@@ -1,55 +1,78 @@
 # MuleTrace AI
 
-## About the Project
+MuleTrace AI is a synthetic-data investigation prototype. It combines a static dashboard with a Python rule engine for transaction tracing and transparent risk triage.
 
-MuleTrace AI is a team project exploring how AI-assisted tools can help investigators review suspicious transaction patterns and trace money flows between accounts.
-
-The system is intended to support investigation and evidence review. Risk indicators are not proof of criminal activity, and final decisions must remain with human investigators.
-
-## Project Goals
-
-- Work with synthetic transaction data during development and testing.
-- Trace money flows between accounts.
-- Identify suspicious patterns using transparent investigation rules.
-- Present investigation findings in a dashboard.
-- Explore AI-assisted summaries of investigation results.
-
-## Project Structure
+## Project structure
 
 ```text
 MuleTrace_AI/
-├── data/             # Synthetic data and sample datasets
-├── investigation/    # Transaction tracing and risk analysis
-├── ui/               # User interface and dashboard
-├── aws/              # AWS and AI integration
-├── tests/             # Automated tests
-├── docs/              # Project documentation
-├── generate_data.py   # Data generation script
-├── README.md
-└── .gitignore
+├── app/
+│   ├── frontend/
+│   │   ├── index.html
+│   │   ├── assets/
+│   │   │   ├── css/    # Dashboard styles
+│   │   │   └── js/     # UI behavior, API adapter, config, and demo data
+│   │   ├── manifest.webmanifest
+│   │   └── sw.js       # Service Worker kept at the frontend root
+│   ├── backend/
+│   │   ├── engine.py   # Public investigation facade
+│   │   ├── core/       # Risk rules and tracing algorithms
+│   │   ├── services/   # Alert persistence and orchestration
+│   │   ├── workers/    # Background scanner entry point
+│   │   └── aws/        # Reserved AWS integration placeholder
+│   └── data/           # CSV input and generated alerts
+├── tests/              # Python unit tests
+├── docs/               # Architecture and run instructions
+├── Dockerfile
+├── compose.yaml
+├── requirements.txt
+└── run.bat
 ```
 
-## Team Responsibilities
+## Run without Docker
 
-- AI / AWS: AI-assisted investigation summaries and AWS integration.
-- UI: Dashboard and investigation result visualization.
-- Data / Investigation: Synthetic data, transaction tracing, and transparent risk rules.
-- Integration / QA: Integration, testing, coordination, and demo preparation.
+For the frontend demo, use a local Python installation:
 
-## Development Principles
+```powershell
+python -m http.server 8000 --bind 127.0.0.1 --directory app/frontend
+```
 
-- Use synthetic data for development and demonstrations.
-- Never commit passwords, API keys, AWS credentials, access tokens, or sensitive personal data.
-- Work on a separate branch for each task.
-- Review changes before merging them into `main`.
-- Treat risk scores as investigation aids, not proof of wrongdoing.
+Open `http://localhost:8000`. No Python package installation is needed for demo-only use.
 
-## Getting Started
+For backend analysis, install the small Python environment and run a one-time scan:
 
-1. Install Git and Python.
-2. Clone this repository.
-3. Read the project documentation in `docs/`.
-4. Follow the setup instructions agreed on by the team.
-5. Run tests before submitting changes.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --no-cache-dir -r requirements.txt
+.\.venv\Scripts\python.exe -m app.backend.workers.auto_scanner --once
+```
 
-Setup commands and dependencies will be documented once the team confirms the project's Python environment and libraries.
+Windows users can also run `run.bat` for the frontend demo.
+
+## Run with Docker
+
+```powershell
+docker compose up --build
+```
+
+Open `http://localhost:8000`. To run the rule scanner as well:
+
+```powershell
+docker compose --profile analysis up --build
+```
+
+The scanner writes generated alerts to `app/data/alerts.json` through the mounted data directory.
+
+## Verification
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+See `docs/architecture.md` for module responsibilities and `docs/running.md` for startup options.
+
+## Low-storage recommendation
+
+Use the non-Docker demo mode first. It avoids Docker images and Python dependencies. Install the backend environment only when analysis is needed, and keep `--no-cache-dir` in the install command to avoid retaining package caches.
+
+Risk scores and alerts are investigation aids, not proof of wrongdoing. Use synthetic data for development and demonstrations.

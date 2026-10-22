@@ -9,7 +9,7 @@ import json
 import os
 import tempfile
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ALERTS_FILE = PROJECT_ROOT / 'data' / 'alerts.json'
 
 
@@ -69,7 +69,7 @@ def scan_risk_alerts(path: Path = ALERTS_FILE) -> dict[str, Any]:
 
     Returns a summary for a scanner, API or demo. No AI-generated alerts here.
     """
-    from engine import detect_risk  # import lazily; keeps unit tests independent
+    from ..engine import detect_risk  # import lazily; keeps unit tests independent
 
     result = detect_risk()
     findings = result.get('findings', [])

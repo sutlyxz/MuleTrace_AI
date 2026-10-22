@@ -2,7 +2,7 @@
 import unittest
 import pandas as pd
 
-from investigation.risk_rules import (
+from app.backend.core.risk_rules import (
     find_multiple_incoming,
     find_rapid_outgoing,
     find_high_value_transfers,
