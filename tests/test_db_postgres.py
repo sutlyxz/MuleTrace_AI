@@ -47,7 +47,7 @@ SKIP_REASON = _skip_reason()
 class PostgresIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from alembic import command
+        import alembic.command as command
         from alembic.config import Config
 
         from app.backend.db.seed import apply_plan, build_plan

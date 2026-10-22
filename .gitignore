@@ -31,3 +31,7 @@ app/backend/core/risk_results.csv
 pgpass.conf
 .pgpass
 .pytest_cache/
+
+# IDE / editor settings
+.vscode/
+.idea/
