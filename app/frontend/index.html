@@ -80,6 +80,82 @@
         height: 36px !important;
       }
     }
+    /* Sidebar Brand Icon proportional fit with 2-line text */
+    .sidebar .brand {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      padding: 4px 6px !important;
+      line-height: 1 !important;
+    }
+    .sidebar .brand-mark {
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      display: grid !important;
+      place-items: center !important;
+      background: #e9dfd0 !important;
+      color: #745b3e !important;
+      border-radius: 9px !important;
+      font-size: 19px !important;
+      font-weight: 800 !important;
+      flex-shrink: 0 !important;
+      line-height: 1 !important;
+      user-select: none !important;
+      box-sizing: border-box !important;
+    }
+    .sidebar .brand-text {
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+      height: 36px !important;
+      box-sizing: border-box !important;
+    }
+    .sidebar .brand-name {
+      display: inline-flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: baseline !important;
+      gap: 4px !important;
+      white-space: nowrap !important;
+      font-size: 18.5px !important;
+      font-weight: 750 !important;
+      line-height: 1.15 !important;
+      color: #25251f !important;
+    }
+    .sidebar .brand-name b {
+      display: inline-block !important;
+      color: #9c7951 !important;
+      font-weight: 800 !important;
+    }
+    .sidebar .brand-text small,
+    .sidebar .brand small {
+      display: block !important;
+      margin-top: 0 !important;
+      font-size: 8px !important;
+      letter-spacing: 1.1px !important;
+      color: #777870 !important;
+      font-weight: 700 !important;
+      line-height: 1.1 !important;
+      text-transform: uppercase !important;
+      white-space: nowrap !important;
+    }
+    @media (max-width: 720px) {
+      .sidebar .brand-mark {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        font-size: 17px !important;
+        border-radius: 8px !important;
+      }
+      .sidebar .brand-text {
+        height: auto !important;
+      }
+    }
   </style>
 
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -102,10 +178,10 @@
     <!-- เมนูด้านซ้าย -->
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">M</span>
-        <span>
-          MuleTrace <b>AI</b>
-          <small>INVESTIGATION INTELLIGENCE</small>
+        <span class="brand-mark" style="width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 19px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; background: #e9dfd0; color: #745b3e; font-weight: 800; user-select: none;">M</span>
+        <span class="brand-text" style="display: flex; flex-direction: column; justify-content: center; height: 36px; gap: 2px;">
+          <span class="brand-name" style="display: inline-flex; align-items: baseline; white-space: nowrap; font-size: 18.5px; font-weight: 750; line-height: 1.15; color: #25251f;">MuleTrace <b style="color: #9c7951; margin-left: 4px; font-weight: 800; display: inline-block;">AI</b></span>
+          <small style="display: block; margin-top: 0; font-size: 8px; letter-spacing: 1.1px; color: #777870; font-weight: 700; line-height: 1.1; text-transform: uppercase; white-space: nowrap;">INVESTIGATION INTELLIGENCE</small>
         </span>
       </div>
 
