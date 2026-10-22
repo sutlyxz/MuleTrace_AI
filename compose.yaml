@@ -2,12 +2,12 @@ services:
   frontend:
     build: .
     ports:
-      - "8000:8000"
+      - "${FRONTEND_PORT:-8000}:8000"
     command: python -m http.server 8000 --bind 0.0.0.0 --directory app/frontend
 
   scanner:
     build: .
     profiles: [analysis]
-    command: python -m app.backend.workers.auto_scanner
+    command: python -m app.backend.workers.auto_scanner --interval ${SCAN_INTERVAL:-3}
     volumes:
       - ./app/data:/workspace/app/data

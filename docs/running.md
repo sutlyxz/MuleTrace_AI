@@ -20,6 +20,18 @@ Use the command without `--once` to watch the CSV files for changes.
 
 ## Docker
 
+Optional: copy the example configuration from the project root before starting Compose:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Only copy when `.env` does not already exist; otherwise edit your existing local file.
+Compose reads `.env` automatically. `FRONTEND_PORT` sets the host port (default `8000`),
+and `SCAN_INTERVAL` sets the scanner polling interval in seconds (default `3`, must be positive).
+For example, setting `FRONTEND_PORT=8080` makes the dashboard available at `http://localhost:8080`.
+Both defaults also work without creating `.env`.
+
 ```powershell
 docker compose up --build
 docker compose --profile analysis up --build
@@ -28,6 +40,10 @@ docker compose --profile analysis up --build
 The first command serves the frontend. The second also starts the optional scanner profile. Stop with `Ctrl+C`; clean up this project's frontend and scanner containers with `docker compose --profile analysis down`.
 
 The frontend remains served from `app/frontend`; its scripts and styles now live in `assets/js` and `assets/css`. Change optional remote API endpoints in `app/frontend/assets/js/config.js`.
+
+Non-Docker commands do not load `.env` automatically. Set the HTTP port directly in the server
+command and pass `--interval 3` (or another positive value) to the scanner. No AWS credentials
+are required for the current demo; never put credentials or secrets in frontend configuration.
 
 ## Troubleshooting
 

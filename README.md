@@ -51,6 +51,9 @@ Windows users can also run `run.bat` for the frontend demo.
 
 ## Run with Docker
 
+Optional: copy `.env.example` to `.env` (do not overwrite an existing file) to customize
+`FRONTEND_PORT` and `SCAN_INTERVAL`. See `docs/running.md` for details.
+
 ```powershell
 docker compose up --build
 ```
