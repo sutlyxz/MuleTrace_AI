@@ -1,4 +1,4 @@
-"""Private backend environment loading and public runtime settings."""
+﻿"""Private backend environment loading and public runtime settings."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +7,21 @@ import os
 from pathlib import Path
 from typing import Mapping
 
-from dotenv import dotenv_values
+try:
+    from dotenv import dotenv_values
+except ImportError:
+    def dotenv_values(dotenv_path: Path | str, encoding: str = 'utf-8-sig', interpolate: bool = False) -> dict[str, str]:
+        parsed: dict[str, str] = {}
+        target = Path(dotenv_path)
+        if not target.is_file():
+            return parsed
+        for line in target.read_text(encoding=encoding).splitlines():
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            parsed[key.strip()] = val.strip().strip("'\"")
+        return parsed
 
 
 def load_environment(root: Path, base_environment: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -40,6 +54,18 @@ class RuntimeSettings:
         if not math.isfinite(interval) or interval <= 0:
             raise ValueError('SCAN_INTERVAL must be a positive finite number.')
         return cls(frontend_port=port, scan_interval=interval)
+
+
+@dataclass(frozen=True)
+class BedrockSettings:
+    region: str = "us-east-1"
+    model_id: str = "amazon.nova-lite-v1:0"
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> BedrockSettings:
+        region = environment.get("AWS_REGION") or environment.get("AWS_DEFAULT_REGION") or "us-east-1"
+        model_id = environment.get("BEDROCK_MODEL_ID") or "amazon.nova-lite-v1:0"
+        return cls(region=region.strip(), model_id=model_id.strip())
 
 
 def frontend_environment(environment: Mapping[str, str]) -> dict[str, str]:

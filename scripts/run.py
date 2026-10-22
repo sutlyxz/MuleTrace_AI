@@ -12,6 +12,8 @@ import webbrowser
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def ensure_environment_file(root: Path) -> None:
@@ -52,7 +54,7 @@ def prepare_runtime(root: Path) -> Path:
 
 def local_commands(root: Path, settings) -> tuple[list[str], list[str]]:
     frontend = [
-        sys.executable, '-m', 'http.server', str(settings.frontend_port),
+        sys.executable, '-m', 'app.backend.server', str(settings.frontend_port),
         '--bind', '127.0.0.1', '--directory', str(root / 'app' / 'frontend'),
     ]
     scanner = [
