@@ -1,0 +1,2 @@
+account_id,rule,evidence,transaction_ids,reason,case_ids
+B782,cross_case_overlap,2,,"Account B782 appears in 2 distinct cases: CASE001, CASE002","CASE001, CASE002"
