@@ -1,2 +1,8 @@
+# Core investigation engine and environment loading
 pandas>=2.2,<3
 python-dotenv>=1.0,<2
+
+# PostgreSQL storage (local PostgreSQL and Amazon RDS for PostgreSQL)
+SQLAlchemy>=2.0.36,<2.1
+alembic>=1.14
+psycopg[binary]>=3.2.10
