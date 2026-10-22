@@ -1,3 +1,12 @@
+// Auth Guard: Ensure session is active
+if (
+  typeof window !== "undefined" &&
+  window.sessionStorage &&
+  sessionStorage.getItem("muletrace_auth_session") !== "active"
+) {
+  window.location.replace("login.html");
+}
+
 
 "use strict";
 
@@ -1103,7 +1112,20 @@ function initialize() {
     );
   });
 
-  $("#runAi").addEventListener("click", () => {
+  // Logout Action
+  const logoutBtn = $("#logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      try {
+        sessionStorage.removeItem("muletrace_auth_session");
+      } catch (e) {
+        // Fallback
+      }
+      window.location.replace("login.html");
+    });
+  }
+
+    $("#runAi").addEventListener("click", () => {
     callAi(
       analyze(currentCase()),
       currentCase()

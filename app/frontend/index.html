@@ -9,6 +9,79 @@
 
   <title>MuleTrace AI | Investigation Workspace</title>
 
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem("muletrace_auth_session") !== "active") {
+          window.location.replace("login.html");
+        }
+      } catch (e) {
+        window.location.replace("login.html");
+      }
+    })();
+
+    function handleLogout() {
+      try {
+        sessionStorage.removeItem("muletrace_auth_session");
+        localStorage.removeItem("muletrace_auth_session");
+      } catch (e) {}
+      window.location.replace("login.html");
+    }
+  </script>
+  <style>
+    #logoutBtn.btn-logout {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      background: #ffffff !important;
+      color: #745b3e !important;
+      border: 1px solid #ded9d1 !important;
+      padding: 8px 14px !important;
+      border-radius: 9px !important;
+      font-family: inherit !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease-in-out !important;
+      white-space: nowrap !important;
+      flex: 0 0 auto !important;
+      box-shadow: 0 1px 3px rgba(70, 50, 30, 0.05) !important;
+      height: 40px !important;
+      box-sizing: border-box !important;
+    }
+    #logoutBtn.btn-logout:hover {
+      background: #fdfaf6 !important;
+      border-color: #c9ad87 !important;
+      color: #553e24 !important;
+      box-shadow: 0 3px 8px rgba(116, 91, 62, 0.12) !important;
+      transform: translateY(-1px);
+    }
+    #logoutBtn.btn-logout:active {
+      transform: translateY(0);
+      background: #f5ede2 !important;
+    }
+    #logoutBtn.btn-logout:focus-visible {
+      outline: 2px solid #9c7951 !important;
+      outline-offset: 2px !important;
+    }
+    #logoutBtn .logout-icon {
+      stroke: currentColor !important;
+      flex-shrink: 0 !important;
+      transition: transform 0.15s ease !important;
+    }
+    #logoutBtn:hover .logout-icon {
+      transform: translateX(2px) !important;
+    }
+    @media (max-width: 720px) {
+      #logoutBtn.btn-logout {
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        height: 36px !important;
+      }
+    }
+  </style>
+
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/css/style.css">
@@ -93,6 +166,15 @@
           </label>
 
           <select id="caseSelect" aria-label="เลือกเคส"></select>
+
+          <button type="button" id="logoutBtn" class="btn-logout" aria-label="ออกจากระบบ" title="ออกจากระบบ" onclick="handleLogout()">
+            <svg class="logout-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span class="logout-label">ออกจากระบบ</span>
+          </button>
         </div>
       </header>
 

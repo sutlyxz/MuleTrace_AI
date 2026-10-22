@@ -131,6 +131,17 @@
     text(".case-select-label", "เคส", "CASE");
 
     text(
+      ".btn-logout .logout-label",
+      "ออกจากระบบ",
+      "Logout"
+    );
+
+    $$(".btn-logout").forEach(btn => {
+      btn.setAttribute("aria-label", choose("ออกจากระบบ", "Logout"));
+      btn.setAttribute("title", choose("ออกจากระบบ", "Logout"));
+    });
+
+    text(
       ".mode-badge",
       "● ข้อมูลจำลอง",
       "● DEMO DATA"
