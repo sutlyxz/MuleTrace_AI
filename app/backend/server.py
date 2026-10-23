@@ -125,11 +125,11 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                         )
                     else:
                         summary = (
-                            f"รายงานระบบกฎ MuleTrace AML สำหรับเคส {case_id}:\\n"
-                            f"- คะแนนความสำคัญ: {investigation_data.get('score', 80)} ({investigation_data.get('priority', 'High')})\\n"
-                            f"- ?????????????????????????: {', '.join(investigation_data.get('rule_types_matched', ['multiple_incoming', 'rapid_outgoing']))}\n"
-                            f"- ?????: ???????????????????????????????????????\n"
-                            f"(????????????????????? AWS Bedrock: {ai_err})"
+                            f"รายงานระบบกฎ MuleTrace AML สำหรับเคส {case_id}:\n"
+                            f"- คะแนนความสำคัญ: {investigation_data.get('score', 80)} ({investigation_data.get('priority', 'High')})\n"
+                            f"- สัญญาณความเสี่ยงที่พบ: {', '.join(investigation_data.get('rule_types_matched', ['multiple_incoming', 'rapid_outgoing']))}\n"
+                            f"- สถานะ: สรุปผลเบื้องต้นจากระบบกฎภายในเรียบร้อยแล้ว\n"
+                            f"(แจ้งเตือนการเชื่อมต่อ AWS Bedrock: {ai_err})"
                         )
 
                 self._send_json_response({"status": "success", "summary": summary})
