@@ -1,0 +1,10 @@
+﻿project-includes = [
+    "app/**/*.py",
+    "aws/**/*.py",
+    "scripts/**/*.py",
+    "tests/**/*.py",
+]
+project-excludes = [
+    ".venv/**",
+    "**/__pycache__/**",
+]
