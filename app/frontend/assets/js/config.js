@@ -1,16 +1,21 @@
 /*
-  MuleTrace AI ? Frontend Configuration
+  MuleTrace AI — Frontend Configuration
 
   apiUrl:
-    ????????????? AI ????? Backend
+    สำหรับส่งคำขอ AI ไปยัง Backend
 
   casesApiUrl:
-    ????????????????????? Backend
+    สำหรับดึงรายการเคสจาก Backend
 
-  ??????? AWS Access Key ???? Secret Key ?????????
+  ห้ามใส่ AWS Access Key หรือ Secret Key ในไฟล์นี้
 */
 
+const _origin =
+  typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : "http://localhost:8000";
+
 window.MULETRACE_CONFIG = {
-  apiUrl: "http://127.0.0.1:8000/api/ai/summary",
-  casesApiUrl: "http://127.0.0.1:8000/api/cases"
+  apiUrl: `${_origin}/api/ai/summary`,
+  casesApiUrl: `${_origin}/api/cases`
 };

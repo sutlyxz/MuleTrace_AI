@@ -11,6 +11,29 @@ from .bedrock_service import (
     is_boto3_available,
     run_investigation_agent,
 )
+from .s3_service import (
+    DEFAULT_BUCKET_NAME,
+    ensure_s3_bucket,
+    get_default_bucket_name,
+    get_report_from_s3,
+    get_s3_client,
+    is_s3_available,
+    upload_dataset_to_s3,
+    upload_report_to_s3,
+)
+from .dynamodb_service import (
+    DEFAULT_TABLE_NAME,
+    ensure_dynamodb_table,
+    get_default_table_name,
+    get_dynamodb_resource,
+    get_investigation_alert,
+    is_dynamodb_available,
+    save_investigation_alert,
+)
+from .lambda_handler import (
+    handle_api_request,
+    lambda_handler,
+)
 
 __all__ = [
     "BEDROCK_TOOL_DEFINITIONS",
@@ -23,4 +46,21 @@ __all__ = [
     "get_bedrock_runtime_client",
     "is_boto3_available",
     "run_investigation_agent",
+    "DEFAULT_BUCKET_NAME",
+    "ensure_s3_bucket",
+    "get_default_bucket_name",
+    "get_report_from_s3",
+    "get_s3_client",
+    "is_s3_available",
+    "upload_dataset_to_s3",
+    "upload_report_to_s3",
+    "DEFAULT_TABLE_NAME",
+    "ensure_dynamodb_table",
+    "get_default_table_name",
+    "get_dynamodb_resource",
+    "get_investigation_alert",
+    "is_dynamodb_available",
+    "save_investigation_alert",
+    "handle_api_request",
+    "lambda_handler",
 ]

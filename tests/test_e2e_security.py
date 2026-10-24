@@ -75,8 +75,8 @@ class TestPhase43E2ESecurity(unittest.TestCase):
         dev_url = env.get(db_config.DATABASE_URL_ENV) or ""
         test_url = env.get(db_config.TEST_DATABASE_URL_ENV) or ""
 
-        assert dev_url, "DATABASE_URL must be defined"
-        assert test_url, "TEST_DATABASE_URL must be defined"
+        if not dev_url or not test_url:
+            raise unittest.SkipTest("DATABASE_URL and TEST_DATABASE_URL are required for live PostgreSQL E2E tests")
 
         dev_db = urlparse(dev_url).path.lstrip("/")
         test_db = urlparse(test_url).path.lstrip("/")

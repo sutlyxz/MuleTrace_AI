@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 import threading
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -26,9 +27,99 @@ from app.backend.core.risk_rules import (
 
 logger = logging.getLogger("muletrace.simulation.transport")
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 # Global thread-safe in-memory registry for simulation run tracking
 _RUN_REGISTRY_LOCK = threading.Lock()
 _RUN_REGISTRY: dict[str, dict[str, Any]] = {}
+_SIMULATED_CASES: list[dict[str, Any]] = []
+
+
+def _evaluate_batch_findings(events: list[dict[str, Any]], run_id: str) -> dict[str, Any]:
+    """Evaluate the 3 core AML risk rules on the simulation batch and record flagged cases."""
+    if not events:
+        return {
+            "total_findings": 0,
+            "rule_matches": {"multiple_incoming": 0, "rapid_outgoing": 0, "high_value": 0},
+            "cases": [],
+        }
+
+    df = pd.DataFrame(events)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["amount"] = pd.to_numeric(df["amount"])
+
+    multiple_df = find_multiple_incoming(df)
+    rapid_df = find_rapid_outgoing(df)
+    high_val_df = find_high_value_transfers(df)
+
+    flagged_accounts: list[str] = []
+    for res_df in (multiple_df, rapid_df, high_val_df):
+        if not res_df.empty and "account_id" in res_df.columns:
+            for acc in res_df["account_id"].tolist():
+                if acc not in flagged_accounts:
+                    flagged_accounts.append(acc)
+
+    short_tag = run_id.split("_")[-1][:4].upper() if "_" in run_id else "SIM"
+    batch_transactions = [
+        {
+            "id": str(ev.get("transaction_id", "")),
+            "from": str(ev.get("source_account", "")),
+            "to": str(ev.get("target_account", "")),
+            "amount": float(ev.get("amount", 0.0)),
+            "time": str(ev.get("timestamp", "")).replace(" ", "T")[:19],
+        }
+        for ev in events
+    ]
+    created_cases: list[dict[str, Any]] = []
+    for idx, acc in enumerate(flagged_accounts, start=1):
+        in_tx = df[df["target_account"] == acc]
+        acc_tx = df[(df["target_account"] == acc) | (df["source_account"] == acc)]
+        if not in_tx.empty:
+            max_idx = in_tx["amount"].idxmax()
+            trigger_row = in_tx.loc[max_idx]
+            src = str(trigger_row["source_account"])
+            tgt = str(trigger_row["target_account"])
+            amt = float(in_tx["amount"].max())
+            tx_id = str(trigger_row["transaction_id"])
+            tx_time = trigger_row["timestamp"].strftime("%Y-%m-%dT%H:%M:%S")
+        elif not acc_tx.empty:
+            max_idx = acc_tx["amount"].idxmax()
+            trigger_row = acc_tx.loc[max_idx]
+            src = str(trigger_row["source_account"])
+            tgt = str(trigger_row["target_account"])
+            amt = float(acc_tx["amount"].max())
+            tx_id = str(trigger_row["transaction_id"])
+            tx_time = trigger_row["timestamp"].strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            src = "-"
+            tgt = acc
+            amt = 0.0
+            tx_id = ""
+            tx_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        created_cases.append({
+            "caseId": f"SIM-{short_tag}-{idx:02d}",
+            "source": src,
+            "target": tgt,
+            "amount": amt,
+            "time": tx_time,
+            "status": "new",
+            "risk": "HIGH",
+            "priorityScore": max(78, 94 - (idx - 1) * 4),
+            "transactionId": tx_id,
+            "description": f"ตรวจพบความเสี่ยงจากการจำลองธุรกรรม (Run: {short_tag}) บัญชี {tgt} มีรูปแบบรับ-โอนเงินผิดปกติเข้าข่ายบัญชีม้า",
+            "run_id": run_id,
+            "transactions": batch_transactions,
+        })
+
+    return {
+        "total_findings": len(multiple_df) + len(rapid_df) + len(high_val_df),
+        "rule_matches": {
+            "multiple_incoming": len(multiple_df),
+            "rapid_outgoing": len(rapid_df),
+            "high_value": len(high_val_df),
+        },
+        "cases": created_cases,
+    }
 
 
 class SimulationTransport(ABC):
@@ -36,39 +127,15 @@ class SimulationTransport(ABC):
 
     @abstractmethod
     def send_events(self, events: list[dict[str, Any]], run_id: str) -> dict[str, Any]:
-        """Submit a batch of simulation events.
-
-        Args:
-            events: Validated list of transaction event dictionaries.
-            run_id: Unique simulation run ID.
-
-        Returns:
-            Dictionary containing submission status and metadata.
-        """
+        """Submit a batch of simulation events."""
 
 
 class LocalSimulationTransport(SimulationTransport):
     """Local / mock transport executing risk detection in-memory for testing and local mode."""
 
     def send_events(self, events: list[dict[str, Any]], run_id: str) -> dict[str, Any]:
-        df = pd.DataFrame(events)
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df["amount"] = pd.to_numeric(df["amount"])
-
-        # Execute exactly the 3 risk detection rules
-        multiple_df = find_multiple_incoming(df)
-        rapid_df = find_rapid_outgoing(df)
-        high_val_df = find_high_value_transfers(df)
-
-        flagged_accounts: set[str] = set()
-        if not multiple_df.empty:
-            flagged_accounts.update(multiple_df["account_id"].tolist())
-        if not rapid_df.empty:
-            flagged_accounts.update(rapid_df["account_id"].tolist())
-        if not high_val_df.empty:
-            flagged_accounts.update(high_val_df["account_id"].tolist())
-
-        total_findings = len(multiple_df) + len(rapid_df) + len(high_val_df)
+        eval_info = _evaluate_batch_findings(events, run_id)
+        total_findings = eval_info["total_findings"]
         first_ev = events[0] if events else {}
 
         result_record: dict[str, Any] = {
@@ -81,11 +148,7 @@ class LocalSimulationTransport(SimulationTransport):
             "message": f"Successfully submitted {len(events)} simulated transactions locally",
             "cases_created_hint": total_findings > 0,
             "total_findings": total_findings,
-            "rule_matches": {
-                "multiple_incoming": len(multiple_df),
-                "rapid_outgoing": len(rapid_df),
-                "high_value": len(high_val_df),
-            },
+            "rule_matches": eval_info["rule_matches"],
             "seed": first_ev.get("seed"),
             "base_timestamp": first_ev.get("base_timestamp"),
             "generator_version": first_ev.get("generator_version"),
@@ -100,6 +163,9 @@ class LocalSimulationTransport(SimulationTransport):
 
         with _RUN_REGISTRY_LOCK:
             _RUN_REGISTRY[run_id] = result_record
+            for c in eval_info["cases"]:
+                if not any(existing.get("caseId") == c["caseId"] for existing in _SIMULATED_CASES):
+                    _SIMULATED_CASES.append(c)
 
         return result_record
 
@@ -119,6 +185,13 @@ class EventBridgeSimulationTransport(SimulationTransport):
         region: str | None = None,
         allow_debug_dispatch: bool = False,
     ) -> None:
+        if not os.environ.get("AWS_ACCESS_KEY_ID") and (PROJECT_ROOT / ".env").is_file():
+            try:
+                from app.backend.config import load_environment
+                os.environ.update(load_environment(PROJECT_ROOT))
+            except Exception:
+                pass
+
         self.bus_name = event_bus_name or os.environ.get("EVENTBRIDGE_BUS_NAME", "muletrace-transactions")
         self.source = source or os.environ.get("EVENTBRIDGE_SOURCE", "muletrace.simulation")
         self.detail_type = detail_type or os.environ.get("EVENTBRIDGE_DETAIL_TYPE", "TransactionEvent")
@@ -135,7 +208,10 @@ class EventBridgeSimulationTransport(SimulationTransport):
 
         try:
             import boto3
-            self._client = boto3.client("events", region_name=self.region)
+            from botocore.config import Config
+            cfg = Config(connect_timeout=2, read_timeout=4, retries={"max_attempts": 1})
+            self._client = boto3.client("events", region_name=self.region, config=cfg)
+
             return self._client
         except Exception as exc:
             raise RuntimeError(f"Failed to initialize AWS EventBridge client: {exc}")
@@ -197,6 +273,8 @@ class EventBridgeSimulationTransport(SimulationTransport):
                 logger.error(f"EventBridge put_events failed for chunk: {err}")
                 raise RuntimeError(f"EventBridge dispatch failed: {err}")
 
+        eval_info = _evaluate_batch_findings(events, run_id)
+
         result_record: dict[str, Any] = {
             "status": "success" if failed_count == 0 else "partial_failure",
             "run_id": run_id,
@@ -207,7 +285,9 @@ class EventBridgeSimulationTransport(SimulationTransport):
             "confirmed": total_submitted > 0,
             "submitted_at": now_utc.isoformat(),
             "message": f"Submitted {total_submitted}/{len(events)} events to EventBridge '{self.bus_name}'",
-            "cases_created_hint": True,
+            "cases_created_hint": eval_info["total_findings"] > 0,
+            "total_findings": eval_info["total_findings"],
+            "rule_matches": eval_info["rule_matches"],
             "seed": first_ev.get("seed"),
             "base_timestamp": first_ev.get("base_timestamp"),
             "generator_version": first_ev.get("generator_version"),
@@ -223,6 +303,10 @@ class EventBridgeSimulationTransport(SimulationTransport):
 
         with _RUN_REGISTRY_LOCK:
             _RUN_REGISTRY[run_id] = result_record
+            if total_submitted > 0:
+                for c in eval_info["cases"]:
+                    if not any(existing.get("caseId") == c["caseId"] for existing in _SIMULATED_CASES):
+                        _SIMULATED_CASES.append(c)
 
         return result_record
 
@@ -231,3 +315,9 @@ def get_run_record(run_id: str) -> dict[str, Any] | None:
     """Retrieve run record from the in-memory registry."""
     with _RUN_REGISTRY_LOCK:
         return _RUN_REGISTRY.get(run_id)
+
+
+def get_simulated_cases() -> list[dict[str, Any]]:
+    """Return a copy of simulated risk cases generated during the current session."""
+    with _RUN_REGISTRY_LOCK:
+        return list(_SIMULATED_CASES)

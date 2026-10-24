@@ -1,7 +1,7 @@
 // Service Worker: เก็บเฉพาะไฟล์ Demo
 // ไม่เก็บคำตอบจาก AWS API
 
-const CACHE_NAME = "muletrace-v4";
+const CACHE_NAME = "muletrace-v13";
 
 const FILES = [
   "./",
@@ -24,14 +24,12 @@ self.addEventListener("install", event => {
       await Promise.allSettled(
         FILES.map(async file => {
           try {
-            const response = await fetch(file);
-            if (response.ok) {
+            const response = await fetch(file, { credentials: "same-origin" });
+            if (response.ok && !response.redirected) {
               await cache.put(file, response);
-            } else {
-              console.warn(`[SW] Skip caching ${file}: HTTP ${response.status}`);
             }
-          } catch (err) {
-            console.warn(`[SW] Network error caching ${file}:`, err);
+          } catch (_) {
+            // Ignore unauthenticated or offline asset pre-cache failures
           }
         })
       );
@@ -61,6 +59,15 @@ self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
 
   if (url.origin !== self.location.origin) return;
+
+  if (
+    event.request.mode === "navigate" ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/" ||
+    url.pathname.endsWith(".html")
+  ) {
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

@@ -306,28 +306,27 @@
           <small>${tr("คำอธิบาย", "Description")}</small>
           <p>${escapeHTML(description)}</p>
         </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <button type="button"
+            class="mtcm-primary"
+            data-action="investigate"
+            data-id="${escapeHTML(item.caseId)}">
+            ${tr(
+              "เปิด Investigation สำหรับเคสนี้ →",
+              "Open Investigation for this case →"
+            )}
+          </button>
 
-        ${
-          canOpenDemo
-            ? `
-              <button type="button"
-                class="mtcm-primary"
-                data-action="investigate">
-                ${tr(
-                  "เปิด Investigation สำหรับเคสนี้ →",
-                  "Open Investigation for this case →"
-                )}
-              </button>
-            `
-            : `
-              <div class="mtcm-integration-note">
-                ${tr(
-                  "เคสจาก API แสดงรายละเอียดได้แล้ว การเปิดกราฟและวิเคราะห์ต่อจะต้องเชื่อมบัญชี ธุรกรรม และผลวิเคราะห์จาก Backend เพิ่มเติม",
-                  "API case details are available. Opening its money trail and investigation requires linked accounts, transactions, and backend analysis results."
-                )}
-              </div>
-            `
-        }
+          <button type="button"
+            class="mtcm-secondary"
+            data-action="trail"
+            data-id="${escapeHTML(item.caseId)}">
+            ${tr(
+              "ดูกราฟเส้นทางเงิน (Money Trail) →",
+              "View Money Trail Graph →"
+            )}
+          </button>
+        </div>
       </section>
     `;
   }
@@ -416,12 +415,21 @@
           <td>${escapeHTML(score)}</td>
 
           <td>
-            <button type="button"
-              class="mtcm-view"
-              data-action="view"
-              data-id="${escapeHTML(item.caseId)}">
-              ${tr("ดูเคส →", "View →")}
-            </button>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button"
+                class="mtcm-view"
+                data-action="view"
+                data-id="${escapeHTML(item.caseId)}">
+                ${tr("รายละเอียด", "Details")}
+              </button>
+              <button type="button"
+                class="mtcm-view"
+                style="background: #745b3e; color: #fff; border-color: #745b3e;"
+                data-action="investigate"
+                data-id="${escapeHTML(item.caseId)}">
+                ${tr("สืบสวน →", "Investigate →")}
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -524,7 +532,7 @@
     const sourceLabel =
       state.source === "api"
         ? "API DATA"
-        : "DEMO DATA";
+        : "SYSTEM DATA";
 
     root.innerHTML = `
       <div class="mtcm-container">
@@ -619,8 +627,8 @@
                   class="mtcm-secondary"
                   data-action="demo">
                   ${tr(
-                    "ใช้ข้อมูล Demo ชั่วคราว",
-                    "Use Demo Data Instead"
+                    "ใช้ข้อมูลเริ่มต้น",
+                    "Use Default Data"
                   )}
                 </button>
               </div>
@@ -820,9 +828,13 @@
       state.receivedCount = result.receivedCount;
       state.limited = result.limited;
       state.page = 1;
-      state.selectedId = null;
+      state.selectedId = result.cases[0]?.caseId || null;
       state.status = "all";
       state.risk = "all";
+
+      if (typeof window.syncMuleTraceCases === "function") {
+        window.syncMuleTraceCases(state.cases);
+      }
 
     } catch (error) {
       state.error = error.message ||
@@ -860,33 +872,39 @@
     render();
   }
 
-  function openExistingInvestigation() {
-    const selector =
-      document.querySelector("#caseSelect");
+  function openExistingInvestigation(caseId, targetPage = "investigation") {
+    const targetId = caseId || state.selectedId;
+    if (!targetId) return;
 
-    const exists = [...(selector?.options || [])]
-      .some(option =>
-        option.value === state.selectedId
-      );
-
-    if (!exists || state.source !== "demo") {
+    if (typeof window.openCaseInvestigation === "function") {
+      window.openCaseInvestigation(targetId, targetPage);
       return;
     }
 
-    selector.value = state.selectedId;
+    const selector =
+      document.querySelector("#caseSelect");
 
-    selector.dispatchEvent(
-      new Event("change", {
-        bubbles: true
-      })
-    );
+    if (selector) {
+      if (![...selector.options].some(o => o.value === targetId)) {
+        const opt = document.createElement("option");
+        opt.value = targetId;
+        opt.textContent = targetId;
+        selector.appendChild(opt);
+      }
+      selector.value = targetId;
+      selector.dispatchEvent(
+        new Event("change", {
+          bubbles: true
+        })
+      );
+    }
 
-    const investigationNav =
+    const navBtn =
       document.querySelector(
-        '.nav-item[data-page="investigation"]'
+        `.nav-item[data-page="${targetPage}"]`
       );
 
-    investigationNav?.click();
+    navBtn?.click();
   }
 
   function handleClick(event) {
@@ -928,7 +946,18 @@
     }
 
     if (action === "investigate") {
-      openExistingInvestigation();
+      openExistingInvestigation(
+        button.dataset.id || state.selectedId,
+        "investigation"
+      );
+      return;
+    }
+
+    if (action === "trail") {
+      openExistingInvestigation(
+        button.dataset.id || state.selectedId,
+        "trail"
+      );
       return;
     }
 

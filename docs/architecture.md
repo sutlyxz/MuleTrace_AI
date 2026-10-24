@@ -4,43 +4,53 @@
 Browser
   │
   ▼
-app/frontend/index.html
+[Frontend Dashboard] (โฮสต์บน Amazon S3 + CloudFront)
   ├── assets/css/ ── shared styles and case-manager styles
   ├── assets/js/  ── application, cases, API, config, i18n, demo data
-  └── sw.js      ── caches local assets; stays at root for scope
-
-app/data/*.csv
-  │
-  ▼
-app/backend/engine.py ◄───► app/backend/aws/bedrock_service.py (AWS Bedrock AI)
-  │
-  ├── app/backend/core/risk_rules.py
-  ├── app/backend/core/tracing.py
-  └── app/backend/services/alert_service.py
+  └── sw.js       ── caches local assets; stays at root for scope
+          │
+          ▼ (HTTPS API Call)
+  [Amazon API Gateway]
           │
           ▼
-      app/data/alerts.json
+  [AWS Lambda (Risk Engine & Agent)]
+          ├── ดึง Dataset / Rules อ้างอิง  ──► [Amazon S3]
+          ├── สรุปวิเคราะห์เคสลึกซึ้ง      ──► [Amazon Bedrock]
+          └── บันทึก Alert / ผลตรวจ         ──► [Amazon DynamoDB]
 ```
 
-The frontend is intentionally static and can run without the backend. The backend reads synthetic CSV files from `app/data` using paths derived from the package location, so commands work from the repository root or from Docker. There is no API server in this basic layout; the frontend's remote API fields remain optional configuration for future integration.
+## Core Components & AWS Responsibilities
 
-## Responsibilities
+### 1. Frontend Hosting (Amazon S3 + CloudFront)
+- `app/frontend/` is pure static HTML/CSS/JavaScript with zero build-step overhead.
+- Deployable directly to Amazon S3 via `python scripts/deploy_frontend_s3.py`.
+- Paired with Amazon CloudFront for HTTPS, low-latency CDN edge delivery, and zero server maintenance.
 
-- `engine.py` is the public backend entry point for investigation functions and AI summary facades.
-- `core/` contains risk rules and tracing algorithms.
-- `services/` stores and deduplicates alerts using the engine's findings.
-- `workers/auto_scanner.py` watches CSV changes and invokes the alert service.
-- `aws/` provides AWS Bedrock integration (`bedrock_service.py`), supporting:
-  - Converse API for multi-model LLM generation (Anthropic Claude, Amazon Nova, etc.)
-  - Bedrock Tool Use mapping `engine.py` functions directly into LLM agent tools
-  - AI Narrative generation for AML case and account triage
-  - Autonomous multi-step investigation agent loop
-  - Graceful fallback when running in local demo mode without AWS credentials
+### 2. API Gateway & Serverless Compute (AWS Lambda)
+- `app/backend/aws/lambda_handler.py` provides the serverless API proxy handling:
+  - `GET /health`: Engine status
+  - `GET /cases`: Investigation case catalog
+  - `POST /trace`: Multi-hop transaction fund flow graph tracing
+  - `GET /score`: Heuristic AML risk scoring
+  - `POST /api/ai/summary`: Synchronous triage combining Amazon Bedrock, S3 audit reports, and DynamoDB alerts
+  - Full CORS support for cross-domain calls from S3/CloudFront.
 
-Private configuration belongs to the repository-root `.env`. The launcher gives public settings
-to the frontend server and private settings only to backend workers. The browser never receives
-AWS keys or other private variables.
+### 3. Case & Dataset Storage (Amazon S3)
+- `app/backend/aws/s3_service.py` manages S3 object storage for:
+  - Raw and processed transaction CSV datasets.
+  - Comprehensive case investigation summaries (`reports/{case_id}/investigation_summary.json`).
 
-Run Python entry points as modules from the project root, for example:
-- `python -m app.backend.workers.auto_scanner --once`
+### 4. Fast Alert Persistence (Amazon DynamoDB)
+- `app/backend/aws/dynamodb_service.py` provides sub-millisecond NoSQL persistence:
+  - Persists high-priority alerts with partition key `case_id` on-demand (`PAY_PER_REQUEST`).
+  - Automatic type serialization (`float` <-> `Decimal`) for DynamoDB compatibility.
+
+### 5. Generative AML AI Copilot (Amazon Bedrock)
+- `app/backend/aws/bedrock_service.py`:
+  - Uses Converse API with Amazon Nova Lite or Anthropic Claude.
+  - Generates formal bilingual Thai/English compliance narrative reports.
+  - Autonomous agent loop with Bedrock Tool Use for multi-hop graph analysis.
+
+## Running Tests
+Run Python test suite from the project root:
 - `python -m unittest discover -s tests -p "test_*.py"`

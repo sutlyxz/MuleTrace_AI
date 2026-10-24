@@ -159,6 +159,7 @@ class CognitoAuthService:
             )
 
         user_info = {
+            "id": str(user_id),
             "user_id": str(user_id),
             "email": normalized_email,
             "display_name": str(display_name),
@@ -189,6 +190,10 @@ class CognitoAuthService:
 
         return raw_session_token, user_info
 
+    def validate_session(self, raw_token: str) -> dict[str, Any] | None:
+        """Alias for verify_session used by MuleTraceRequestHandler."""
+        return self.verify_session(raw_token)
+
     def verify_session(self, raw_token: str) -> dict[str, Any] | None:
         """Verify session token against the session store."""
         if not raw_token:
@@ -196,8 +201,10 @@ class CognitoAuthService:
         session = self.session_store.get_session(raw_token)
         if not session:
             return None
+        uid = session.get("user_id") or session.get("id")
         return {
-            "user_id": session.get("user_id"),
+            "id": uid,
+            "user_id": uid,
             "email": session.get("email"),
             "display_name": session.get("display_name"),
             "role": session.get("role"),
@@ -260,6 +267,7 @@ class CognitoAuthService:
 
         role = "admin" if self.config.group_admin in groups else "user"
         user_info = {
+            "id": str(user_id),
             "user_id": str(user_id),
             "email": normalized_email,
             "display_name": str(display_name),

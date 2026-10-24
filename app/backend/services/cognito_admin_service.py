@@ -402,10 +402,15 @@ class CognitoAdminService:
 
         return {"message": "Password reset successfully", "user_id": target_username}
 
+    def reset_user_password(self, **kwargs: Any) -> dict[str, Any]:
+        """Alias for reset_password used by MuleTraceRequestHandler."""
+        return self.reset_password(**kwargs)
+
     def list_audit_logs(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         """Query application security audit logs."""
         logs, total = self.audit_repo.list_logs(limit=limit, offset=offset)
         return {
+            "logs": logs,
             "audit_logs": logs,
             "total": total,
             "limit": limit,

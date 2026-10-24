@@ -105,9 +105,17 @@
 
       const runInfo = data.data || {};
       const count = runInfo.events_submitted || 20;
+      const busSuffix =
+        runInfo.transport === "aws_eventbridge" && runInfo.event_bus
+          ? ` (EventBridge: ${runInfo.event_bus})`
+          : "";
       const successMsg = isEnglish()
-        ? `Simulation completed: ${count} transactions submitted to pipeline.`
-        : `จำลองธุรกรรมสำเร็จ: ส่ง ${count} รายการธุรกรรมเข้าสู่ระบบ`;
+        ? `Simulation completed: ${count} transactions submitted to pipeline${busSuffix}.`
+        : `จำลองธุรกรรมสำเร็จ: ส่ง ${count} รายการธุรกรรมเข้าสู่ระบบ${busSuffix}`;
+
+      if (window.MuleCaseManager && typeof window.MuleCaseManager.refresh === "function") {
+        await window.MuleCaseManager.refresh();
+      }
 
       setButtonState("completed");
       showFeedback("success", successMsg, true);

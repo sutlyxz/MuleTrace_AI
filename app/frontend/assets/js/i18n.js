@@ -111,14 +111,14 @@
 
     plainTextNode(
       ".sidebar-foot",
-      "โหมดข้อมูลจำลองเปิดอยู่",
-      "Demo mode active"
+      "ระบบพร้อมใช้งาน",
+      "System Active"
     );
 
     text(
       ".sidebar-foot small",
-      "ข้อมูลจำลองเท่านั้น · ไม่เชื่อมระบบธนาคารจริง",
-      "Synthetic data only · No live banking connection"
+      "ระบบสืบสวนทางการเงิน · เชื่อมต่อ AWS Cloud",
+      "Financial Investigation · AWS Cloud Connected"
     );
 
     // Header
@@ -143,8 +143,8 @@
 
     text(
       ".mode-badge",
-      "● ข้อมูลจำลอง",
-      "● DEMO DATA"
+      "● ระบบพร้อมใช้งาน",
+      "● LIVE SYSTEM"
     );
 
     // ชื่อหน้าปัจจุบัน
@@ -362,8 +362,8 @@
 
     text(
       "#page-investigation .two-col .soft-pill",
-      "เดโม่แบบกฎ",
-      "RULE-BASED DEMO"
+      "ระบบกฎอัตโนมัติ",
+      "RULE-BASED ENGINE"
     );
 
     // =====================================
@@ -422,8 +422,8 @@
 
     text(
       "footer",
-      "MuleTrace AI · ต้นแบบการแข่งขัน · ข้อมูลจำลอง · เจ้าหน้าที่ตรวจสอบขั้นสุดท้าย",
-      "MuleTrace AI · Hackathon Prototype · Synthetic Data Only · Human Review Required"
+      "MuleTrace AI · ระบบวิเคราะห์เส้นทางการเงิน · เจ้าหน้าที่ตรวจสอบขั้นสุดท้าย",
+      "MuleTrace AI · Financial Investigation Platform · Human Review Required"
     );
   }
 

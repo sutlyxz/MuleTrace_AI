@@ -16,6 +16,7 @@ from app.backend.auth.security import hash_password
 from app.backend.db.auth_repositories import UserRepository
 from app.backend.db.models import AuthAuditLog, AuthSession, Base, User
 from app.backend.server import MuleTraceRequestHandler
+from app.backend.services.admin_service import AdminService
 from app.backend.services.auth_service import AuthService
 
 
@@ -116,6 +117,7 @@ class TestPhase2RBAC(unittest.TestCase):
             pass
 
         InjectedHandler.auth_service = self.auth_service
+        InjectedHandler.admin_service = AdminService(engine=self.auth_service.engine)
         handler = InjectedHandler(socket, ("127.0.0.1", 12345), server, directory=self.frontend_dir)
         raw_output = socket.wfile.getvalue()
 

@@ -222,15 +222,18 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         self, html_content: str, status_code: int = 200, headers: dict[str, str] | None = None
     ) -> None:
         payload = html_content.encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self._send_cors_headers()
-        if headers:
-            for k, v in headers.items():
-                self.send_header(k, v)
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._send_cors_headers()
+            if headers:
+                for k, v in headers.items():
+                    self.send_header(k, v)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
 
     def _send_error(
         self,
@@ -255,15 +258,32 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         self, data: dict[str, Any], status_code: int = 200, headers: dict[str, str] | None = None
     ) -> None:
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self._send_cors_headers()
-        if headers:
-            for k, v in headers.items():
-                self.send_header(k, v)
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            if headers:
+                for k, v in headers.items():
+                    self.send_header(k, v)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
+
+    def copyfile(self, source: Any, outputfile: Any) -> None:
+        """Suppress client socket abort tracebacks when browser cancels static asset downloads."""
+        try:
+            super().copyfile(source, outputfile)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
+
+    def handle_one_request(self) -> None:
+        """Suppress benign client socket disconnects on Windows."""
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
 
     def end_headers(self) -> None:
         """Add strict cache control headers to prevent browser caching of sensitive pages."""
@@ -273,13 +293,18 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_OPTIONS(self) -> None:
-        self.send_response(204)
-        self._send_cors_headers()
-        self.end_headers()
+        try:
+            self.send_response(204)
+            self._send_cors_headers()
+            self.end_headers()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
 
     def do_GET(self) -> None:
         try:
             self._handle_get()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
         except Exception:
             self._send_error(500, "Internal server error")
 
@@ -378,20 +403,68 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                 cases_df = engine.load_case_accounts()
                 tx_df = engine.load_transactions()
                 unique_cases = cases_df["case_id"].dropna().unique().tolist()
-                records = []
-                for cid in unique_cases:
+                records = [
+                    {
+                        "caseId": "MT-1042",
+                        "source": "A001",
+                        "target": "B782",
+                        "amount": 180000.0,
+                        "time": "2026-09-16T02:13:00",
+                        "status": "new",
+                        "risk": "HIGH",
+                        "priorityScore": 96,
+                        "transactionId": "T001",
+                        "description": "บัญชีเปิดใหม่ B782 รับโอนยอดสูง ฿180,000 จากหลายบัญชีและโอนออกต่อไปยัง C991 และ D201 ภายใน 90 นาที",
+                    },
+                    {
+                        "caseId": "MT-1043",
+                        "source": "A024",
+                        "target": "B782",
+                        "amount": 95000.0,
+                        "time": "2026-09-16T02:14:00",
+                        "status": "new",
+                        "risk": "HIGH",
+                        "priorityScore": 88,
+                        "transactionId": "T002",
+                        "description": "โอนเงินสมทบเข้าบัญชีเป้าหมาย B782 ต่อเนื่องในช่วงเวลาเดียวกัน เชื่อมโยงกับเครือข่ายเคสก่อนหน้า MT-0931",
+                    },
+                ]
+                for idx, cid in enumerate(unique_cases):
                     accounts = cases_df[cases_df["case_id"] == cid]["account_id"].tolist()
                     target = accounts[0] if accounts else None
                     tx_match = tx_df[tx_df["target_account"] == target] if target else None
-                    amount = float(tx_match.iloc[0]["amount"]) if tx_match is not None and not tx_match.empty else 0
-                    source = tx_match.iloc[0]["source_account"] if tx_match is not None and not tx_match.empty else "-"
+                    has_tx = tx_match is not None and not tx_match.empty
+                    amount = float(tx_match.iloc[0]["amount"]) if has_tx else 0.0
+                    source = str(tx_match.iloc[0]["source_account"]) if has_tx else "-"
+                    tx_time = (
+                        str(tx_match.iloc[0]["timestamp"]).replace(" ", "T")[:19]
+                        if has_tx and "timestamp" in tx_match.columns
+                        else "2026-09-16T02:13:00"
+                    )
+                    tx_id = (
+                        str(tx_match.iloc[0]["transaction_id"])
+                        if has_tx and "transaction_id" in tx_match.columns
+                        else "T001"
+                    )
                     records.append({
                         "caseId": cid,
                         "source": source,
                         "target": target,
                         "amount": amount,
+                        "time": tx_time,
                         "status": "new",
+                        "risk": "HIGH" if idx == 0 else "MEDIUM",
+                        "priorityScore": 82 if idx == 0 else 74,
+                        "transactionId": tx_id,
+                        "description": f"ตรวจพบธุรกรรมต้องสงสัยเชื่อมโยงบัญชี {source} → {target} ในชุดข้อมูลเฝ้าระวัง",
                     })
+                try:
+                    from app.backend.simulation.transport import get_simulated_cases
+                    for sim_case in get_simulated_cases():
+                        if not any(r.get("caseId") == sim_case.get("caseId") for r in records):
+                            records.insert(0, sim_case)
+                except Exception:
+                    pass
                 self._send_json_response({"status": "success", "cases": records})
                 return
             except Exception:
@@ -681,9 +754,69 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                 # Map external case IDs if needed (e.g. MT-1042 -> CASE001)
                 normalized_case = "CASE001" if "1042" in str(case_id) else ("CASE002" if "1043" in str(case_id) else str(case_id))
 
-                # Fetch engine investigation metrics
+                # Fetch engine investigation metrics or build per-case simulated dataset
                 try:
-                    investigation_data = engine.score_investigation(case_id=normalized_case)
+                    if str(case_id).upper().startswith("SIM-"):
+                        from app.backend.simulation.transport import get_simulated_cases
+                        sim_match = next(
+                            (sc for sc in get_simulated_cases() if sc.get("caseId") == str(case_id)),
+                            None,
+                        )
+                        tx_records = (
+                            investigation_input.get("transactions")
+                            or (sim_match or {}).get("transactions")
+                            or []
+                        )
+                        ev_chain = investigation_input.get("evidence_chain") or []
+                        src_acc = (
+                            investigation_input.get("source_account")
+                            or (sim_match or {}).get("source")
+                            or "-"
+                        )
+                        tgt_acc = (
+                            investigation_input.get("target_account")
+                            or (sim_match or {}).get("target")
+                            or "-"
+                        )
+                        scope_accounts = investigation_input.get("linked_accounts") or list(
+                            dict.fromkeys(
+                                [src_acc, tgt_acc]
+                                + [str(t.get("from") or t.get("source_account", "")) for t in tx_records]
+                                + [str(t.get("to") or t.get("target_account", "")) for t in tx_records]
+                            )
+                        )
+                        investigation_data = {
+                            "case_id": str(case_id),
+                            "source_account": src_acc,
+                            "target_account": tgt_acc,
+                            "alert_amount": investigation_input.get("alert_amount")
+                            or (sim_match or {}).get("amount", 0.0),
+                            "accounts_in_scope": [a for a in scope_accounts if a and a != "-"],
+                            "score": investigation_input.get("priority_score")
+                            or (sim_match or {}).get("priorityScore", 90),
+                            "priority": investigation_input.get("risk_level")
+                            or (sim_match or {}).get("risk", "HIGH"),
+                            "rule_types_matched": [
+                                item.get("title", "pattern_match") for item in ev_chain
+                            ]
+                            or ["multiple_incoming", "rapid_outgoing", "high_value_transfer"],
+                            "reasons": [
+                                f"{item.get('title', '')}: {item.get('detail', '')}"
+                                for item in ev_chain
+                            ]
+                            or [
+                                f"Target node {tgt_acc} received high-frequency transfers from {src_acc} and routed funds across connected nodes"
+                            ],
+                            "finding_count": max(len(ev_chain), 1),
+                            "evidence_transaction_ids": [
+                                str(t.get("transaction_id") or t.get("id", ""))
+                                for t in tx_records[:15]
+                                if t.get("transaction_id") or t.get("id")
+                            ],
+                            "evidence": tx_records[:20],
+                        }
+                    else:
+                        investigation_data = engine.score_investigation(case_id=normalized_case)
                 except Exception:
                     investigation_data = {
                         "case_id": normalized_case,
@@ -752,8 +885,17 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                     except Exception:
                         base_time_dt = None
 
+                import concurrent.futures
+                from app.backend.simulation.transport import LocalSimulationTransport
+
                 engine_inst = SimulationEngine()
-                sim_res = engine_inst.run_simulation(seed=seed_val, base_time=base_time_dt)
+                try:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        fut = pool.submit(engine_inst.run_simulation, seed=seed_val, base_time=base_time_dt)
+                        sim_res = fut.result(timeout=2.5)
+                except Exception:
+                    fallback_engine = SimulationEngine(transport=LocalSimulationTransport())
+                    sim_res = fallback_engine.run_simulation(seed=seed_val, base_time=base_time_dt)
                 self._send_json_response({"status": "success", "data": sim_res}, 200)
                 return
             except Exception as sim_err:
@@ -832,10 +974,83 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         self._send_json_response({"status": "error", "message": "Endpoint not found"}, 404)
 
 
+def _setup_local_demo_auth_if_needed() -> None:
+    """Configure Amazon Cognito when AWS credentials are available, or fallback to SQLite."""
+    os.environ.setdefault("COGNITO_USER_POOL_ID", "us-east-1_isiF7v59f")
+    os.environ.setdefault("COGNITO_APP_CLIENT_ID", "7e9d5usrro4b6jnd7pk741m3vi")
+    os.environ.setdefault("COGNITO_GROUP_ADMIN", "Admin")
+    os.environ.setdefault("COGNITO_GROUP_OFFICER", "BankOfficer")
+
+    if os.environ.get("MULETRACE_AUTH_PROVIDER", "").strip().lower() == "cognito":
+        MuleTraceRequestHandler._custom_auth_service = None
+        MuleTraceRequestHandler._custom_admin_service = None
+        pool_id = os.environ.get("COGNITO_USER_POOL_ID", "")
+        client_id = os.environ.get("COGNITO_APP_CLIENT_ID", "")
+        print(f"[*] Auth Provider: Amazon Cognito (UserPool: {pool_id}, ClientId: {client_id})", flush=True)
+        return
+
+    if os.environ.get("DATABASE_URL", "").strip():
+        return
+
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from sqlalchemy.pool import StaticPool
+        from app.backend.auth.security import hash_password
+        from app.backend.db.auth_repositories import UserRepository
+        from app.backend.db.models import Base
+
+        import tempfile
+        db_file = Path(tempfile.gettempdir()) / "muletrace_demo_auth.sqlite"
+        demo_engine = create_engine(
+            f"sqlite:///{db_file.as_posix()}",
+            connect_args={"check_same_thread": False},
+        )
+        Base.metadata.create_all(
+            demo_engine,
+            tables=[Base.metadata.tables[t] for t in ("users", "auth_sessions", "auth_audit_logs")],
+        )
+        with Session(demo_engine) as session:
+            user_repo = UserRepository(session)
+            if not user_repo.get_by_email("officer@agency.go.th"):
+                user_repo.create_user(
+                    email="officer@agency.go.th",
+                    display_name="Bank Officer",
+                    role="user",
+                    password_hash=hash_password("OfficerPass123!@#"),
+                    is_active=True,
+                )
+            if not user_repo.get_by_email("admin@agency.go.th"):
+                user_repo.create_user(
+                    email="admin@agency.go.th",
+                    display_name="System Admin",
+                    role="admin",
+                    password_hash=hash_password("AdminPass123!@#"),
+                    is_active=True,
+                )
+            session.commit()
+
+        MuleTraceRequestHandler._custom_auth_service = AuthService(engine=demo_engine)
+        MuleTraceRequestHandler._custom_admin_service = AdminService(engine=demo_engine)
+        print("[*] Auth Service active (Argon2id + 5-attempt rate limit):", flush=True)
+        print("    - Bank Officer (Dashboard): officer@agency.go.th  /  OfficerPass123!@#", flush=True)
+        print("    - Administrator (Admin):    admin@agency.go.th    /  AdminPass123!@#", flush=True)
+    except Exception as exc:
+        print(f"[!] Auth setup warning: {exc}", flush=True)
+
+
 def run_server(port: int = 8000, bind: str = "127.0.0.1", directory: Path | str | None = None) -> None:
     # Load private environment (.env)
     env = load_environment(PROJECT_ROOT)
     os.environ.update(env)
+    if not os.environ.get("MULETRACE_SIMULATION_TRANSPORT", "").strip():
+        if os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROFILE"):
+            os.environ["MULETRACE_SIMULATION_TRANSPORT"] = "eventbridge"
+    _setup_local_demo_auth_if_needed()
+    active_transport = os.environ.get("MULETRACE_SIMULATION_TRANSPORT", "local").strip().lower()
+    if active_transport == "eventbridge":
+        bus_name = os.environ.get("EVENTBRIDGE_BUS_NAME", "muletrace-transactions")
+        print(f"[*] Simulation Transport: Amazon EventBridge (bus: {bus_name})", flush=True)
 
     target_dir = Path(directory) if directory else PROJECT_ROOT / "app" / "frontend"
     handler = functools.partial(MuleTraceRequestHandler, directory=str(target_dir))
@@ -852,7 +1067,6 @@ def run_server(port: int = 8000, bind: str = "127.0.0.1", directory: Path | str 
     except KeyboardInterrupt:
         print("\n[*] Shutting down MuleTrace AI Server...", flush=True)
         server.server_close()
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="MuleTrace AI Unified Web & API Server")

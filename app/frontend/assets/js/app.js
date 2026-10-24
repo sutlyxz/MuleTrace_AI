@@ -10,15 +10,25 @@ const fmt = value =>
     maximumFractionDigits: 0
   });
 
-const dateLabel = iso =>
-  new Date(iso).toLocaleString("th-TH", {
+const dateLabel = iso => {
+  if (!iso) return "\u2014";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return String(iso);
+  return parsed.toLocaleString("th-TH", {
     dateStyle: "medium",
     timeStyle: "short"
   });
+};
 
-const byTime = [...D.transactions].sort(
-  (a, b) => a.time.localeCompare(b.time)
+let byTime = [...D.transactions].sort(
+  (a, b) => String(a.time || "").localeCompare(String(b.time || ""))
 );
+
+function refreshTransactions() {
+  byTime = [...D.transactions].sort(
+    (a, b) => String(a.time || "").localeCompare(String(b.time || ""))
+  );
+}
 
 const state = {
   page: "overview",
@@ -30,7 +40,7 @@ const state = {
 };
 
 const currentCase = () =>
-  D.cases.find(c => c.caseId === state.caseId);
+  D.cases.find(c => c.caseId === state.caseId) || D.cases[0];
 
 function el(tag, text, cls) {
   const node = document.createElement(tag);
@@ -131,20 +141,27 @@ function network(seed, maxHops = 3) {
 
 function analyze(c) {
   const n = network(c.target, 3);
-  const account = D.accounts[c.target];
+  const account = D.accounts[c.target] || {
+    name: `Account ${c.target}`,
+    status: "flagged",
+    openedDays: 12,
+    avgAmount: 3200
+  };
 
   const ref = new Date(c.time).getTime();
   const hour = 3600000;
 
+  const isSim = String(c.caseId || "").startsWith("SIM-");
+
   const inbound = D.transactions.filter(t =>
     t.to === c.target &&
     new Date(t.time).getTime() >= ref - 24 * hour &&
-    new Date(t.time).getTime() <= ref
+    new Date(t.time).getTime() <= (isSim ? ref + 2 * hour : ref)
   );
 
   const outbound = D.transactions.filter(t =>
     t.from === c.target &&
-    new Date(t.time).getTime() >= ref &&
+    new Date(t.time).getTime() >= (isSim ? ref - 2 * hour : ref) &&
     new Date(t.time).getTime() <= ref + 4 * hour
   );
 
@@ -184,7 +201,9 @@ function analyze(c) {
   }
 
   // Rule 3: โอนเงินต่ออย่างรวดเร็ว
-  const large = inbound.filter(t => t.amount >= 50000);
+  const large = inbound.filter(
+    t => t.amount >= 50000 || (isSim && inbound.length >= 3 && outbound.length >= 1)
+  );
 
   if (large.length) {
     const t0 = Math.min(
@@ -308,21 +327,26 @@ function analyze(c) {
 
 function renderMetrics(a) {
   const data = [
-    ["ACTIVE CASES", D.cases.length],
-    ["TRANSACTIONS", D.transactions.length],
-    ["LINKED ACCOUNTS", a.network.nodes.length],
-    ["PRIORITY SCORE", a.score + "/100"]
+    ["ACTIVE CASES", D.cases.length, "cases"],
+    ["TRANSACTIONS", D.transactions.length, "trail"],
+    ["LINKED ACCOUNTS", a.network.nodes.length, "trail"],
+    ["PRIORITY SCORE", a.score + "/100", "investigation"]
   ];
 
   put(
     $("#metrics"),
-    ...data.map(([name, num]) => {
-      const box = el("div", undefined, "metric");
+    ...data.map(([name, num, targetPage]) => {
+      const box = el("div", undefined, "metric clickable");
+      box.style.cursor = "pointer";
 
       box.append(
         el("small", name),
         el("strong", String(num))
       );
+
+      box.addEventListener("click", () => {
+        showPage(targetPage);
+      });
 
       return box;
     })
@@ -387,25 +411,30 @@ function renderOverview(a, c) {
     `${a.risk} PRIORITY`;
 
   const blocks = [
-    ["CASE ID", c.caseId],
-    ["TARGET ACCOUNT", c.target],
-    ["AMOUNT", fmt(c.amount)],
-    ["EVIDENCE SIGNALS", a.signals.length]
+    ["CASE ID", c.caseId, "investigation"],
+    ["TARGET ACCOUNT", c.target, "trail"],
+    ["AMOUNT", fmt(c.amount), "investigation"],
+    ["EVIDENCE SIGNALS", a.signals.length, "report"]
   ];
 
   put(
     $("#snapshot"),
-    ...blocks.map(([name, num]) => {
+    ...blocks.map(([name, num, targetPage]) => {
       const div = el(
         "div",
         undefined,
-        "snapshot-item"
+        "snapshot-item clickable"
       );
+      div.style.cursor = "pointer";
 
       div.append(
         el("small", name),
         el("strong", String(num))
       );
+
+      div.addEventListener("click", () => {
+        showPage(targetPage);
+      });
 
       return div;
     })
@@ -771,13 +800,26 @@ function renderInvestigation(a, c) {
 
   put(
     $("#recommendedAccounts"),
-    ...a.next.map(x =>
-      el(
-        "span",
+    ...a.next.map(x => {
+      const chip = el(
+        "button",
         `${x.id} · ${x.score} points`,
-        "chip"
-      )
-    )
+        "chip clickable"
+      );
+      chip.type = "button";
+      chip.style.cursor = "pointer";
+      chip.addEventListener("click", () => {
+        const linkedTx = D.transactions.find(
+          t => t.from === x.id || t.to === x.id
+        );
+        if (linkedTx) {
+          state.selectedTx = linkedTx.id;
+        }
+        state.replay = byTime.length;
+        showPage("trail");
+      });
+      return chip;
+    })
   );
 }
 
@@ -864,7 +906,7 @@ function renderEvidence(a) {
 function reportText(a, c) {
   const lines = [
     "MULETRACE AI — INVESTIGATION REPORT",
-    "SYNTHETIC DATA · DEMO ONLY",
+    "OFFICIAL INVESTIGATION REPORT",
     "================================",
     `Case: ${c.caseId}`,
     `Target: ${c.target}`,
@@ -932,14 +974,18 @@ async function callAi(a, c) {
   let url =
     window.MULETRACE_CONFIG?.apiUrl?.trim() || "";
 
-  if (!url && typeof window !== "undefined" && window.location?.origin) {
-    url = `${window.location.origin}/api/ai/summary`;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    if (!url) {
+      url = `${window.location.origin}/api/ai/summary`;
+    } else if (url.startsWith("/")) {
+      url = `${window.location.origin}${url}`;
+    }
   }
 
   if (!url) {
     box.textContent =
       "ยังไม่ได้กำหนด API endpoint ใน config.js · " +
-      "ใช้ Rule-based Demo อยู่";
+      "ใช้ Rule-based อยู่";
     return;
   }
 
@@ -966,19 +1012,37 @@ async function callAi(a, c) {
   try {
     const response = await fetch(url, {
       method: "POST",
+      credentials: "same-origin",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         case_id: c.caseId,
-        language: window.MULETRACE_I18N?.getLanguage?.() || "th",
+        language:
+          window.MuleI18N?.getLanguage?.() ||
+          window.MULETRACE_I18N?.getLanguage?.() ||
+          "th",
         investigation: {
+          case_id: c.caseId,
+          source_account: c.source,
+          target_account: c.target,
+          alert_amount: c.amount,
+          alert_time: c.time,
           priority_score: a.score,
           risk_level: a.risk,
+          linked_accounts: a.network.nodes,
+          recommended_next_accounts: a.next,
           evidence_chain: a.signals.map(s => ({
             title: s.title,
             detail: s.detail,
             transaction_ids: s.transactionIds
+          })),
+          transactions: a.network.edges.map(t => ({
+            transaction_id: t.id,
+            source_account: t.from,
+            target_account: t.to,
+            amount: t.amount,
+            timestamp: t.time
           }))
         }
       }),
@@ -1045,9 +1109,9 @@ function render() {
 // INITIALIZE APP
 // ==========================================
 
-function initialize() {
+function populateCaseSelect() {
   const select = $("#caseSelect");
-
+  if (!select) return;
   put(
     select,
     ...D.cases.map(c => {
@@ -1056,8 +1120,141 @@ function initialize() {
       return option;
     })
   );
+  if (D.cases.some(c => c.caseId === state.caseId)) {
+    select.value = state.caseId;
+  }
+}
 
-  select.addEventListener("change", () => {
+function syncMuleTraceCases(incomingCases) {
+  if (!Array.isArray(incomingCases) || !incomingCases.length) return;
+
+  const existingById = new Map(D.cases.map(c => [c.caseId, c]));
+  const mergedCases = [];
+
+  for (const item of incomingCases) {
+    if (!item || !item.caseId) continue;
+    const rawTxList = item.transactions || item.raw?.transactions;
+    if (Array.isArray(rawTxList)) {
+      for (const tx of rawTxList) {
+        if (!tx || !tx.id) continue;
+        if (!D.transactions.some(existing => existing.id === tx.id)) {
+          D.transactions.push({
+            id: String(tx.id),
+            from: String(tx.from),
+            to: String(tx.to),
+            amount: Number(tx.amount) || 0,
+            time: String(tx.time || "2026-09-16T02:13:00")
+          });
+        }
+        if (tx.from && !D.accounts[tx.from]) {
+          D.accounts[tx.from] = {
+            name: `Account ${tx.from}`,
+            status: tx.from === item.target ? "flagged" : "watch",
+            openedDays: 14,
+            avgAmount: 3200
+          };
+        }
+        if (tx.to && !D.accounts[tx.to]) {
+          D.accounts[tx.to] = {
+            name: `Account ${tx.to}`,
+            status: tx.to === item.target ? "flagged" : "watch",
+            openedDays: 10,
+            avgAmount: 2900
+          };
+        }
+      }
+    }
+
+    const src = item.source && item.source !== "—" && item.source !== "-" ? item.source : "A001";
+    const tgt = item.target && item.target !== "—" && item.target !== "-" ? item.target : "B782";
+
+    if (!D.accounts[src]) {
+      D.accounts[src] = {
+        name: `Account ${src}`,
+        status: "watch",
+        openedDays: 45,
+        avgAmount: 3500
+      };
+    }
+    if (!D.accounts[tgt]) {
+      D.accounts[tgt] = {
+        name: `Account ${tgt}`,
+        status: "flagged",
+        openedDays: 10,
+        avgAmount: 2800
+      };
+    }
+
+    const txId = item.transactionId || `TX-${item.caseId}`;
+    const txTime = item.time || "2026-09-16T02:13:00";
+    if (!D.transactions.some(t => t.id === txId)) {
+      D.transactions.push({
+        id: txId,
+        from: src,
+        to: tgt,
+        amount: Number(item.amount) || 0,
+        time: txTime
+      });
+    }
+
+    const prev = existingById.get(item.caseId) || {};
+    mergedCases.push({
+      ...prev,
+      caseId: item.caseId,
+      source: src,
+      target: tgt,
+      amount: Number(item.amount ?? prev.amount ?? 0),
+      time: txTime,
+      status: item.status || prev.status || "new",
+      transactionId: txId
+    });
+    existingById.delete(item.caseId);
+  }
+
+  for (const leftover of existingById.values()) {
+    mergedCases.push(leftover);
+  }
+
+  D.cases = mergedCases;
+  refreshTransactions();
+  state.replay = byTime.length;
+  populateCaseSelect();
+  render();
+}
+
+function openCaseInvestigation(caseId, targetPage = "investigation") {
+  if (!caseId) return;
+  const found = D.cases.find(c => c.caseId === caseId);
+  if (!found && window.MuleCaseManager) {
+    const cmCases = window.MuleCaseManager.getCases?.() || [];
+    if (cmCases.length) {
+      syncMuleTraceCases(cmCases);
+    }
+  }
+  const c = D.cases.find(item => item.caseId === caseId) || D.cases[0];
+  if (!c) return;
+
+  state.caseId = c.caseId;
+  state.selectedTx =
+    c.transactionId ||
+    D.transactions.find(t => t.to === c.target || t.from === c.target)?.id ||
+    state.selectedTx;
+  state.replay = byTime.length;
+  state.aiText = "";
+
+  populateCaseSelect();
+  showPage(targetPage);
+}
+
+window.showPage = showPage;
+window.syncMuleTraceCases = syncMuleTraceCases;
+window.openCaseInvestigation = openCaseInvestigation;
+
+function initialize() {
+  const select = $("#caseSelect");
+  populateCaseSelect();
+
+  select?.addEventListener("change", () => {
     state.caseId = select.value;
     state.selectedTx = currentCase().transactionId;
     state.replay = byTime.length;

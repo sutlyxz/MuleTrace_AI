@@ -274,8 +274,17 @@ def _clean_data_for_narrative(data: Any) -> Any:
         return [_clean_data_for_narrative(item) for item in data]
     if isinstance(data, str):
         cleaned_str = data
-        for term in ("finding of wrongdoing", "triage points", "mule", "crime", "fraud"):
-            cleaned_str = cleaned_str.replace(term, "metric")
+        for term in (
+            "finding of wrongdoing",
+            "triage points",
+            "mule",
+            "crime",
+            "fraud",
+            "บัญชีม้า",
+            "ฉ้อโกง",
+            "อาชญากรรม",
+        ):
+            cleaned_str = cleaned_str.replace(term, "network_metric")
         return cleaned_str
     return data
 
@@ -351,6 +360,39 @@ def generate_narrative_report(
     for block in output_message.get("content", []):
         if "text" in block:
             text_content += block["text"]
+
+    if (
+        response.get("stopReason") == "content_filtered"
+        or "blocked by our content filters" in text_content
+    ):
+        for fallback_model in ("amazon.nova-pro-v1:0", "amazon.nova-micro-v1:0"):
+            if fallback_model == target_model:
+                continue
+            try:
+                fb_resp = bedrock_client.converse(
+                    modelId=fallback_model,
+                    messages=messages,
+                    system=[{"text": system}],
+                    inferenceConfig={
+                        "maxTokens": max_tokens,
+                        "temperature": temperature,
+                    },
+                )
+                fb_msg = fb_resp.get("output", {}).get("message", {})
+                fb_text = "".join(
+                    b.get("text", "") for b in fb_msg.get("content", []) if "text" in b
+                )
+                if (
+                    fb_resp.get("stopReason") != "content_filtered"
+                    and "blocked by our content filters" not in fb_text
+                    and fb_text.strip()
+                ):
+                    response = fb_resp
+                    text_content = fb_text
+                    target_model = fallback_model
+                    break
+            except Exception:
+                continue
 
     return {
         "status": "success",

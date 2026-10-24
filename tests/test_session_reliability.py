@@ -77,6 +77,10 @@ class TestSessionReliability(unittest.TestCase):
             cls.test_db_url = "postgresql+psycopg://postgres:postgres@localhost:5432/muletrace_test"
 
         cls.test_db_url = db_config.normalize_database_url(cls.test_db_url)
+        if not os.environ.get(db_config.DATABASE_URL_ENV, "").strip():
+            raise unittest.SkipTest("DATABASE_URL is required for live PostgreSQL session reliability tests")
+        if not os.environ.get(db_config.DATABASE_URL_ENV, "").strip():
+            raise unittest.SkipTest("DATABASE_URL is required for live PostgreSQL session reliability tests")
         cls.dev_db_url = db_config.get_database_url(db_config.DATABASE_URL_ENV)
 
         # STRICT SAFETY: Ensure test database is muletrace_test and NEVER development DB
