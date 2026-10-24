@@ -196,6 +196,7 @@
   <script src="assets/js/api.js" defer></script>
   <script src="assets/js/app.js" defer></script>
   <script src="assets/js/case-manager.js" defer></script>
+  <script src="assets/js/simulation.js" defer></script>
 </head>
 
 <body>
@@ -298,10 +299,18 @@
               </p>
             </div>
 
-            <button class="btn primary" data-go="investigation">
-              เริ่มสืบสวน ↗
-            </button>
+            <div class="intro-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <button class="btn primary" data-go="investigation">
+                เริ่มสืบสวน ↗
+              </button>
+              <button type="button" id="btnSimulate" class="btn btn-simulate">
+                <span class="sim-icon">⚡</span>
+                <span class="sim-text">จำลองธุรกรรม</span>
+              </button>
+            </div>
           </div>
+
+          <div id="simFeedback" class="sim-feedback-toast" hidden></div>
 
           <div class="metrics" id="metrics"></div>
 

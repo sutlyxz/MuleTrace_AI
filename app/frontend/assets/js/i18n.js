@@ -180,6 +180,12 @@
       "Start Investigation ↗"
     );
 
+    text(
+      '#btnSimulate .sim-text',
+      "จำลองธุรกรรม",
+      "Simulate Transactions"
+    );
+
     list(
       "#page-overview .panel .section-head h3",
       ["รายการเคส", "เคสปัจจุบัน"],

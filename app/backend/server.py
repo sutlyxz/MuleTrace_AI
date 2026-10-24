@@ -47,8 +47,36 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
     """Handles static file requests and MuleTrace AI backend API endpoints."""
 
     MAX_BODY_SIZE = 1_048_576  # 1 MB maximum request body size
-    auth_service: AuthService = default_auth_service
-    admin_service: AdminService = default_admin_service
+
+    @property
+    def auth_service(self) -> Any:
+        override = getattr(self, "_custom_auth_service", None)
+        if override is not None:
+            return override
+        class_override = getattr(self.__class__, "_custom_auth_service", None)
+        if class_override is not None:
+            return class_override
+        from app.backend.services.auth_factory import get_active_auth_service
+        return get_active_auth_service()
+
+    @auth_service.setter
+    def auth_service(self, val: Any) -> None:
+        self._custom_auth_service = val
+
+    @property
+    def admin_service(self) -> Any:
+        override = getattr(self, "_custom_admin_service", None)
+        if override is not None:
+            return override
+        class_override = getattr(self.__class__, "_custom_admin_service", None)
+        if class_override is not None:
+            return class_override
+        from app.backend.services.auth_factory import get_active_admin_service
+        return get_active_admin_service()
+
+    @admin_service.setter
+    def admin_service(self, val: Any) -> None:
+        self._custom_admin_service = val
 
     PUBLIC_PATHS = {
         "/login.html",
@@ -70,6 +98,7 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         "/assets/js/config.js",
         "/assets/js/data.js",
         "/assets/js/i18n.js",
+        "/assets/js/simulation.js",
     }
 
     PROTECTED_ADMIN_ASSETS = {
@@ -324,6 +353,20 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             self._send_json_response({"status": "error", "message": "Admin endpoint not found"}, 404)
+            return
+
+        # 3b. Simulation Run Status API (Requires authenticated role)
+        if clean_lower.startswith("/api/simulation/status/"):
+            user = self._require_auth()
+            if user is None:
+                return
+            sim_run_id = clean_path.split("/")[-1]
+            from app.backend.simulation.engine import SimulationEngine
+            status_data = SimulationEngine.get_run_status(sim_run_id)
+            if status_data:
+                self._send_json_response({"status": "success", "data": status_data}, 200)
+            else:
+                self._send_json_response({"status": "error", "message": f"Run ID '{sim_run_id}' not found"}, 404)
             return
 
         # 4. Investigation APIs (Requires 'user' role; admin is denied)
@@ -678,6 +721,43 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
 
             except Exception:
                 self._send_json_response({"status": "error", "message": "Internal server error"}, 500)
+                return
+
+        # 5. Simulation Execution API (Requires 'user' role; Bank Officer action)
+        if clean_path in ("/api/simulation/run", "/api/simulate", "/simulation/run"):
+            user = self._require_user()
+            if user is None:
+                return
+
+            if not self._is_safe_origin():
+                self._send_json_response({"status": "error", "message": "CSRF verification failed"}, 403)
+                return
+
+            try:
+                from datetime import datetime
+                from app.backend.simulation.engine import SimulationEngine
+
+                seed_val = payload.get("seed")
+                if seed_val is not None:
+                    try:
+                        seed_val = int(seed_val)
+                    except (ValueError, TypeError):
+                        seed_val = None
+
+                base_time_raw = payload.get("base_timestamp") or payload.get("base_time")
+                base_time_dt = None
+                if base_time_raw and isinstance(base_time_raw, str):
+                    try:
+                        base_time_dt = datetime.fromisoformat(base_time_raw.replace("Z", "+00:00"))
+                    except Exception:
+                        base_time_dt = None
+
+                engine_inst = SimulationEngine()
+                sim_res = engine_inst.run_simulation(seed=seed_val, base_time=base_time_dt)
+                self._send_json_response({"status": "success", "data": sim_res}, 200)
+                return
+            except Exception as sim_err:
+                self._send_json_response({"status": "error", "message": f"Simulation failed: {sim_err}"}, 500)
                 return
 
         self._send_json_response({"status": "error", "message": "Endpoint not found"}, 404)
