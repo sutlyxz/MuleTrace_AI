@@ -1,13 +1,18 @@
-﻿/**
- * MuleTrace AI — Login Portal Script (Demo & Future AWS Cognito Architecture)
+/**
+ * MuleTrace AI — Login Portal Script (Production PostgreSQL & RBAC Integration)
  * 
  * Features:
- * - Bilingual support (Thai / English) with localStorage synchronization
+ * - Bilingual support (Thai / English) with localStorage language preference synchronization
  * - Client-side form validation (email format, completeness)
  * - Show / Hide password toggle with accessibility attributes
- * - Clean Demo navigation to dashboard (`index.html`)
- * - Privacy safe: No credentials, tokens, or passwords stored or transmitted
- * - Modular AWS Cognito Adapter interface for future enterprise authentication
+ * - Real PostgreSQL-backed authentication via POST /api/auth/login
+ * - Role-Based Access Control (RBAC) redirection:
+ *     - role 'admin' -> /admin.html
+ *     - role 'user'  -> /index.html
+ * - Fail-closed session inspection via GET /api/auth/me
+ * - HttpOnly session cookie handling (no credentials or tokens stored in localStorage/sessionStorage)
+ * - Safe generic error feedback for invalid credentials, suspended accounts, rate limiting, and outages
+ * - Duplicate submission prevention
  */
 
 (() => {
@@ -21,7 +26,7 @@
      ========================================================================== */
   const I18N = {
     th: {
-      pageTitle: "MuleTrace AI | เข้าสู่ระบบการสืบสวน (Demo)",
+      pageTitle: "MuleTrace AI | เข้าสู่ระบบการสืบสวน",
       brandSubtitle: "INVESTIGATION INTELLIGENCE",
       hackathonTag: "HACKATHON PROTOTYPE",
       heroTitle: "Trace the Money.<br><span class=\"hero-accent\">Connect the Evidence.</span>",
@@ -34,31 +39,35 @@
       cap3Title: "AI Investigation Copilot",
       cap3Desc: "ผู้ช่วยอัจฉริยะวิเคราะห์ความเสี่ยง จัดลำดับเคสเร่งด่วน และสรุปพฤติกรรมผิดปกติอัตโนมัติ",
       securityNotice: "🛡️ Financial Crime Intelligence • AML/CFT Investigative Framework",
-      demoChip: "DEMO ENVIRONMENT",
+      demoChip: "ENTERPRISE SECURITY",
       welcomeTitle: "ยินดีต้อนรับกลับ",
-      welcomeSubtitle: "ลงชื่อเข้าสู่พื้นที่จำลองระบบสืบสวน MuleTrace AI",
-      emailLabel: "อีเมลผู้สืบสวน",
+      welcomeSubtitle: "ลงชื่อเข้าสู่ระบบสืบสวน MuleTrace AI",
+      emailLabel: "อีเมลผู้ใช้งาน",
       emailPlaceholder: "investigator@agency.go.th",
       passwordLabel: "รหัสผ่าน",
       passwordPlaceholder: "••••••••",
       togglePasswordShow: "แสดงรหัสผ่าน",
       togglePasswordHide: "ซ่อนรหัสผ่าน",
-      submitButton: "เข้าสู่ระบบ Demo Dashboard",
-      submittingButton: "กำลังเข้าสู่ Dashboard...",
-      demoNoticeTitle: "โหมดทดสอบระบบ (Demo Simulation)",
-      demoNoticeText: "ระบบนี้เป็นการจำลองการนำทางเพื่อการนำเสนอต้นแบบ ไม่มีการเชื่อมต่อฐานข้อมูลผู้ใช้งานจริง และไม่มีการบันทึกรหัสผ่านในเครื่องหรือส่งออกภายนอก",
+      submitButton: "เข้าสู่ระบบ",
+      submittingButton: "กำลังเข้าสู่ระบบ...",
+      demoNoticeTitle: "ระบบยืนยันตัวตนความปลอดภัยสูง (PostgreSQL & Argon2id)",
+      demoNoticeText: "ระบบเชื่อมต่อฐานข้อมูลยืนยันตัวตนด้วยการเข้ารหัส Argon2id พร้อมการจัดการสิทธิ์แบบ Role-Based Access Control (RBAC) ปลอดภัยและตรวจสอบได้ทุกการเข้าถึง",
       awsNoticeTitle: "สถาปัตยกรรมพร้อมเชื่อมต่อ AWS Cognito",
       awsNoticeText: "โครงสร้างฟังก์ชันถูกจัดเตรียมเพื่อเปลี่ยนผ่านสู่การยืนยันตัวตนระดับองค์กรด้วย Amazon Cognito User Pools, OpenID Connect และ Role-Based Access Control",
       
-      // Validation error messages
-      errEmailRequired: "กรุณาระบุอีเมลผู้สืบสวน",
+      // Validation & API error messages
+      errEmailRequired: "กรุณาระบุอีเมลผู้ใช้งาน",
       errEmailInvalid: "รูปแบบอีเมลไม่ถูกต้อง (ตัวอย่าง: investigator@agency.go.th)",
       errPasswordRequired: "กรุณาระบุรหัสผ่าน",
       errFormIncomplete: "กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้องก่อนเข้าสู่ระบบ",
-      successRedirecting: "ตรวจสอบข้อมูลรูปแบบ Demo ถูกต้อง กำลังนำทางสู่ Dashboard..."
+      errInvalidCredentials: "อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชีถูกระงับการใช้งาน",
+      errRateLimit: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง",
+      errServiceUnavailable: "ระบบตรวจสอบตัวตนไม่พร้อมให้บริการชั่วคราว กรุณาลองใหม่ภายหลัง",
+      errNetwork: "เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย กรุณาลองใหม่อีกครั้ง",
+      successRedirecting: "เข้าสู่ระบบสำเร็จ กำลังนำทางสู่ระบบ..."
     },
     en: {
-      pageTitle: "MuleTrace AI | Investigation Login (Demo)",
+      pageTitle: "MuleTrace AI | Investigation Login",
       brandSubtitle: "INVESTIGATION INTELLIGENCE",
       hackathonTag: "HACKATHON PROTOTYPE",
       heroTitle: "Trace the Money.<br><span class=\"hero-accent\">Connect the Evidence.</span>",
@@ -71,28 +80,32 @@
       cap3Title: "AI Investigation Copilot",
       cap3Desc: "Automated anomaly assessment, case priority ranking, and forensic narrative generation.",
       securityNotice: "🛡️ Financial Crime Intelligence • AML/CFT Investigative Framework",
-      demoChip: "DEMO ENVIRONMENT",
+      demoChip: "ENTERPRISE SECURITY",
       welcomeTitle: "Welcome Back",
-      welcomeSubtitle: "Sign in to access the MuleTrace AI investigation workspace",
-      emailLabel: "Investigator Email",
+      welcomeSubtitle: "Sign in to access the MuleTrace AI workspace",
+      emailLabel: "User Email",
       emailPlaceholder: "investigator@agency.go.th",
       passwordLabel: "Password",
       passwordPlaceholder: "••••••••",
       togglePasswordShow: "Show password",
       togglePasswordHide: "Hide password",
-      submitButton: "Enter Demo Dashboard",
-      submittingButton: "Entering Dashboard...",
-      demoNoticeTitle: "Demo Simulation Mode",
-      demoNoticeText: "This page simulates navigation for prototype demonstration. No real authentication or user database is connected, and passwords are never stored or transmitted.",
+      submitButton: "Sign In",
+      submittingButton: "Signing in...",
+      demoNoticeTitle: "High-Security Authentication (PostgreSQL & Argon2id)",
+      demoNoticeText: "Authenticated against local PostgreSQL using Argon2id password hashing and Role-Based Access Control (RBAC). All actions are fully auditable.",
       awsNoticeTitle: "AWS Cognito Enterprise Ready",
       awsNoticeText: "Modular architecture structured for seamless transition to enterprise IAM using Amazon Cognito User Pools, OpenID Connect, and Role-Based Access Control.",
       
-      // Validation error messages
-      errEmailRequired: "Please enter your investigator email.",
+      // Validation & API error messages
+      errEmailRequired: "Please enter your email.",
       errEmailInvalid: "Invalid email format (e.g. investigator@agency.go.th).",
       errPasswordRequired: "Please enter your password.",
       errFormIncomplete: "Please complete all required fields correctly before continuing.",
-      successRedirecting: "Valid demo input. Navigating to Dashboard..."
+      errInvalidCredentials: "Invalid email or password, or account is suspended.",
+      errRateLimit: "Too many login attempts. Please wait a moment and try again.",
+      errServiceUnavailable: "Authentication service is temporarily unavailable. Please try again later.",
+      errNetwork: "Network connection error. Please try again.",
+      successRedirecting: "Authentication successful. Redirecting..."
     }
   };
 
@@ -117,80 +130,92 @@
   }
 
   /* ==========================================================================
-     4. Future AWS Cognito Authentication Adapter Interface
+     4. Real Backend Authentication Adapter (PostgreSQL & RBAC)
      ========================================================================== */
-  /**
-   * MuleTraceAuth: Modular auth controller.
-   * 
-   * Current behavior (Hackathon Prototype):
-   * - Performs strict client-side syntax checks.
-   * - Never persists or transmits credentials.
-   * - Directs user to demo dashboard upon validation.
-   * 
-   * Transition path for AWS Engineering Team:
-   * 1. Set `isDemoMode = false`.
-   * 2. Configure `userPoolId`, `userPoolClientId`, and AWS region.
-   * 3. Integrate with Amazon Cognito SDK or AWS Amplify Auth.
-   * 4. Replace simulated resolution in `authenticate()` with Cognito `InitiateAuth` / `RespondToAuthChallenge`.
-   * 5. Store retrieved JWT in secure httpOnly cookies or application session memory (never localStorage).
-   */
   const MuleTraceAuth = {
-    isDemoMode: true,
-    targetDashboardUrl: "index.html",
-    sessionKey: "muletrace_auth_session",
-
-    setSession() {
+    /**
+     * Check if the user already has an active session via GET /api/auth/me.
+     * Returns user summary object if authenticated, or null if unauthenticated.
+     */
+    async checkSession() {
       try {
-        sessionStorage.setItem(this.sessionKey, "active");
-      } catch (e) {
-        // Storage fallback
-      }
-    },
-
-    clearSession() {
-      try {
-        sessionStorage.removeItem(this.sessionKey);
-      } catch (e) {
-        // Storage fallback
-      }
-    },
-
-    isAuthenticated() {
-      try {
-        return sessionStorage.getItem(this.sessionKey) === "active";
-      } catch (e) {
-        return false;
-      }
-    },
-
-    async authenticate(email, password) {
-      if (this.isDemoMode) {
-        // Prototype Demo Navigation: activate session upon valid credentials
-        this.setSession();
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              success: true,
-              mode: "demo",
-              redirectUrl: this.targetDashboardUrl
-            });
-          }, 350);
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { "Accept": "application/json" }
         });
+        if (!res.ok) {
+          return null;
+        }
+        const data = await res.json();
+        if (data && data.status === "success" && data.user) {
+          return data.user;
+        }
+        return null;
+      } catch (err) {
+        return null;
       }
+    },
 
-      /* --- AWS COGNITO PRODUCTION IMPLEMENTATION PLACEHOLDER ---
-       * Example future implementation:
-       * 
-       * const cognitoClient = new CognitoIdentityProviderClient({ region: AWS_CONFIG.region });
-       * const command = new InitiateAuthCommand({
-       *   AuthFlow: "USER_PASSWORD_AUTH",
-       *   ClientId: AWS_CONFIG.clientId,
-       *   AuthParameters: { USERNAME: email, PASSWORD: password }
-       * });
-       * const response = await cognitoClient.send(command);
-       * return processCognitoTokens(response.AuthenticationResult);
-       * -------------------------------------------------------- */
-      throw new Error("AWS Cognito production provider is not configured in this environment.");
+    /**
+     * Submit login credentials to POST /api/auth/login.
+     * Receives HttpOnly session cookie on success and determines RBAC redirect.
+     */
+    async authenticate(email, password) {
+      const t = I18N[currentLanguage];
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ email, password })
+        });
+
+        if (res.status === 200) {
+          const data = await res.json();
+          const user = data && data.user;
+          const role = user ? user.role : null;
+          let redirectUrl = "index.html";
+          if (role === "admin") {
+            redirectUrl = "admin.html";
+          } else if (role === "user") {
+            redirectUrl = "index.html";
+          }
+          return {
+            success: true,
+            role: role,
+            redirectUrl: redirectUrl
+          };
+        } else if (res.status === 401) {
+          return { success: false, error: t.errInvalidCredentials };
+        } else if (res.status === 429) {
+          return { success: false, error: t.errRateLimit };
+        } else if (res.status === 503) {
+          return { success: false, error: t.errServiceUnavailable };
+        } else {
+          return { success: false, error: t.errInvalidCredentials };
+        }
+      } catch (err) {
+        return { success: false, error: t.errNetwork };
+      }
+    },
+
+    /**
+     * Call POST /api/auth/logout with CSRF protection to invalidate session.
+     */
+    async logout() {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin"
+        });
+      } catch (err) {
+        // Fallback
+      }
     }
   };
 
@@ -306,7 +331,6 @@
   /* ==========================================================================
      8. Validation Functions
      ========================================================================== */
-  // Email regex: Standard format check (username@domain.tld)
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
   function clearFieldError(input, group, errorElement) {
@@ -390,7 +414,6 @@
   function setupFormHandler() {
     if (!loginForm) return;
 
-    // Real-time error clearance on typing
     if (emailInput) {
       emailInput.addEventListener("input", () => {
         if (emailError.classList.contains("visible")) {
@@ -412,6 +435,8 @@
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
+      if (submitBtn.disabled) return;
+
       const isEmailValid = validateEmail(true);
       const isPasswordValid = validatePassword(true);
       const t = I18N[currentLanguage];
@@ -428,29 +453,27 @@
 
       hideAlert();
 
-      // UI Loading state
+      // UI Loading state & prevent duplicate submission
       submitBtn.disabled = true;
       const btnText = submitBtn.querySelector(".btn-text");
       if (btnText) {
         btnText.textContent = t.submittingButton;
       }
-      showAlert(t.successRedirecting, "success");
 
       try {
-        const email = emailInput.value.trim();
+        const email = emailInput.value.trim().toLowerCase();
         const password = passwordInput.value;
 
-        // Perform authentication through modular adapter
         const result = await MuleTraceAuth.authenticate(email, password);
 
         if (result && result.success && result.redirectUrl) {
-          MuleTraceAuth.setSession();
-          window.location.href = result.redirectUrl;
+          showAlert(t.successRedirecting, "success");
+          window.location.replace(result.redirectUrl);
         } else {
-          throw new Error("Navigation failed.");
+          throw new Error((result && result.error) || t.errInvalidCredentials);
         }
       } catch (err) {
-        showAlert(err.message || t.errFormIncomplete, "error");
+        showAlert(err.message || t.errInvalidCredentials, "error");
         submitBtn.disabled = false;
         if (btnText) {
           btnText.textContent = t.submitButton;
@@ -474,13 +497,50 @@
   }
 
   /* ==========================================================================
-     11. Initialization
+     11. Active Session Check (Fail-Closed on load)
+     ========================================================================== */
+  function checkActiveSession() {
+    // Clean up any legacy fake sessionStorage bypass
+    try {
+      sessionStorage.removeItem("muletrace_auth_session");
+      localStorage.removeItem("muletrace_auth_session");
+    } catch (e) {}
+
+    MuleTraceAuth.checkSession().then((user) => {
+      if (user && user.role) {
+        if (user.role === "admin") {
+          window.location.replace("admin.html");
+        } else if (user.role === "user") {
+          window.location.replace("index.html");
+        }
+      }
+    }).catch(() => {
+      // Unauthenticated or network error: stay on login page
+    });
+  }
+
+  /* ==========================================================================
+     12. Initialization
      ========================================================================== */
   document.addEventListener("DOMContentLoaded", () => {
     setupLanguageSwitchers();
     setupPasswordToggle();
     setupFormHandler();
     applyLanguage(currentLanguage);
+    checkActiveSession();
+  });
+
+  // Handle browser Back / bfcache restoration
+  window.addEventListener("pageshow", () => {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      const t = I18N[currentLanguage];
+      const btnText = submitBtn.querySelector(".btn-text");
+      if (btnText && t) {
+        btnText.textContent = t.submitButton;
+      }
+    }
+    checkActiveSession();
   });
 
   // Export adapter to window for inspection or test verification without exposing secrets

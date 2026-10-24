@@ -1,13 +1,3 @@
-// Auth Guard: Ensure session is active
-if (
-  typeof window !== "undefined" &&
-  window.sessionStorage &&
-  sessionStorage.getItem("muletrace_auth_session") !== "active"
-) {
-  window.location.replace("login.html");
-}
-
-
 "use strict";
 
 const D = window.MULETRACE_DATA;
@@ -1120,9 +1110,13 @@ function initialize() {
   // Logout Action
   const logoutBtn = $("#logoutBtn");
   if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
+    logoutBtn.addEventListener("click", async () => {
       try {
-        sessionStorage.removeItem("muletrace_auth_session");
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin"
+        });
       } catch (e) {
         // Fallback
       }

@@ -7,23 +7,49 @@
   <meta name="theme-color" content="#f7f5f1">
   <meta name="description" content="MuleTrace AI investigation prototype">
 
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <title>MuleTrace AI | Investigation Workspace</title>
 
   <script>
-    (function () {
+    (async function () {
       try {
-        if (sessionStorage.getItem("muletrace_auth_session") !== "active") {
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { "Accept": "application/json" }
+        });
+        if (!res.ok) {
           window.location.replace("login.html");
+          return;
+        }
+        const data = await res.json();
+        if (!data || data.status !== "success" || !data.user) {
+          window.location.replace("login.html");
+          return;
+        }
+        if (data.user.role === "admin") {
+          window.location.replace("admin.html");
+          return;
+        }
+        if (data.user.role !== "user") {
+          window.location.replace("login.html");
+          return;
         }
       } catch (e) {
         window.location.replace("login.html");
       }
     })();
 
-    function handleLogout() {
+    async function handleLogout() {
       try {
-        sessionStorage.removeItem("muletrace_auth_session");
-        localStorage.removeItem("muletrace_auth_session");
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin"
+        });
       } catch (e) {}
       window.location.replace("login.html");
     }

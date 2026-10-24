@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    JSON,
     MetaData,
     Numeric,
     String,
@@ -157,3 +158,73 @@ class AlertTransaction(Base):
         String(32), ForeignKey("alerts.alert_id", ondelete="CASCADE"), primary_key=True
     )
     transaction_id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+
+
+class User(Base):
+    """User account model with mutually exclusive 'admin' or 'user' roles."""
+
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'user')", name="ck_users_role"),
+        Index("ix_users_email", "email"),
+    )
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'user'"))
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class AuthSession(Base):
+    """Server-side session record storing only hashed opaque tokens."""
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        Index("ix_auth_sessions_user_id", "user_id"),
+        Index("ix_auth_sessions_token_hash", "token_hash"),
+    )
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(ID_LENGTH), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuthAuditLog(Base):
+    """Immutable audit trail for all authentication and security events."""
+
+    __tablename__ = "auth_audit_logs"
+    __table_args__ = (
+        Index("ix_auth_audit_logs_actor", "actor_user_id"),
+        Index("ix_auth_audit_logs_target", "target_user_id"),
+        Index("ix_auth_audit_logs_action", "action"),
+    )
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    actor_user_id: Mapped[str | None] = mapped_column(String(ID_LENGTH), nullable=True)
+    target_user_id: Mapped[str | None] = mapped_column(String(ID_LENGTH), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    safe_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB(none_as_null=True), "postgresql"), nullable=True
+    )
