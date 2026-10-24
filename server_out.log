@@ -1,0 +1,8 @@
+[LOCAL] Frontend: http://localhost:8000
+[LOCAL] Scanner is watching CSV data. Press Ctrl+C to stop both services.
+[CONFIG] Restart run.bat after changing backend code or .env.
+MuleTrace Auto Alert scanner started [backend=csv] (Ctrl+C to stop)
+[*] MuleTrace AI Server running on http://127.0.0.1:8000/
+[*] Serving static files from: D:\blacklist\MuleTrace_AI\app\frontend
+[*] AI Summary API Endpoint ready at: http://127.0.0.1:8000/api/ai/summary
+[SCAN] findings=3 new_alerts=0 total_alerts=11
