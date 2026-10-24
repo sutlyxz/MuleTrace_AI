@@ -1,7 +1,7 @@
-﻿// Service Worker: เก็บเฉพาะไฟล์ Demo
+// Service Worker: เก็บเฉพาะไฟล์ Demo
 // ไม่เก็บคำตอบจาก AWS API
 
-const CACHE_NAME = "muletrace-v3";
+const CACHE_NAME = "muletrace-v4";
 
 const FILES = [
   "./",
@@ -14,13 +14,28 @@ const FILES = [
   "./assets/js/api.js",
   "./assets/js/app.js",
   "./assets/js/case-manager.js",
+  "./assets/js/simulation.js",
   "./manifest.webmanifest"
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(FILES))
+    caches.open(CACHE_NAME).then(async cache => {
+      await Promise.allSettled(
+        FILES.map(async file => {
+          try {
+            const response = await fetch(file);
+            if (response.ok) {
+              await cache.put(file, response);
+            } else {
+              console.warn(`[SW] Skip caching ${file}: HTTP ${response.status}`);
+            }
+          } catch (err) {
+            console.warn(`[SW] Network error caching ${file}:`, err);
+          }
+        })
+      );
+    })
   );
 
   self.skipWaiting();

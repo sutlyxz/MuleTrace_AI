@@ -24,7 +24,7 @@ class TestFrontendAssets(unittest.TestCase):
     def test_html_assets_exist_under_assets_directory(self):
         parser = AssetParser()
         parser.feed((FRONTEND_ROOT / 'index.html').read_text(encoding='utf-8'))
-        self.assertEqual(len(parser.assets), 8)
+        self.assertEqual(len(parser.assets), 9)
         for asset in parser.assets:
             with self.subTest(asset=asset):
                 self.assertTrue(asset.startswith('assets/'))
