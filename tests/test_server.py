@@ -1,31 +1,35 @@
-﻿"""Unit tests for MuleTrace AI Unified Web & API Server."""
+"""Unit tests for MuleTrace AI Unified Web & API Server."""
 from __future__ import annotations
 
 import io
 import json
 from pathlib import Path
+import socket
+from socketserver import BaseServer
 import unittest
 from unittest.mock import MagicMock, patch
 
 from app.backend.server import MuleTraceRequestHandler
 
 
-class DummySocket:
+class DummySocket(socket.socket):
     def __init__(self, input_bytes: bytes):
         self.rfile = io.BytesIO(input_bytes)
         self.wfile = io.BytesIO()
+        self._closed = False
 
-    def makefile(self, mode: str = "rb", buffering: int = -1):
+    def makefile(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "rb")
         if "r" in mode:
             return self.rfile
         return self.wfile
 
-    def sendall(self, b: bytes) -> None:
-        self.wfile.write(b)
+    def sendall(self, data, flags: int = 0):
+        self.wfile.write(data)
 
-    def send(self, b: bytes) -> int:
-        self.wfile.write(b)
-        return len(b)
+    def send(self, data, flags: int = 0) -> int:
+        self.wfile.write(data)
+        return len(data)
 
     def getpeername(self):
         return ("127.0.0.1", 12345)
@@ -33,8 +37,11 @@ class DummySocket:
     def getsockname(self):
         return ("127.0.0.1", 8000)
 
+    def close(self) -> None:
+        pass
 
-class DummyServer:
+
+class DummyServer(BaseServer):
     def __init__(self):
         self.server_name = "127.0.0.1"
         self.server_port = 8000
@@ -45,10 +52,19 @@ class TestServerEndpoints(unittest.TestCase):
         self.project_root = Path(__file__).resolve().parents[1]
         self.frontend_dir = str(self.project_root / "app" / "frontend")
 
-    def _execute_request(self, request_bytes: bytes) -> tuple[int, dict[str, str], bytes]:
+    def _execute_request(
+        self, request_bytes: bytes, user_override: dict | None = None
+    ) -> tuple[int, dict[str, str], bytes]:
         socket = DummySocket(request_bytes)
         server = DummyServer()
-        handler = MuleTraceRequestHandler(socket, ("127.0.0.1", 12345), server, directory=self.frontend_dir)
+
+        class InjectedHandler(MuleTraceRequestHandler):
+            pass
+
+        if user_override is not None:
+            InjectedHandler._get_current_user = lambda self: user_override
+
+        handler = InjectedHandler(socket, ("127.0.0.1", 12345), server, directory=self.frontend_dir)
         raw_output = socket.wfile.getvalue()
 
         # Parse status line and headers
@@ -86,7 +102,8 @@ class TestServerEndpoints(unittest.TestCase):
 
     def test_get_api_cases(self):
         req = b"GET /api/cases HTTP/1.1\r\nHost: localhost\r\n\r\n"
-        status, headers, body = self._execute_request(req)
+        user = {"id": "usr_test", "role": "user", "email": "officer@test.com"}
+        status, headers, body = self._execute_request(req, user_override=user)
         self.assertEqual(status, 200)
         data = json.loads(body.decode("utf-8"))
         self.assertEqual(data.get("status"), "success")
@@ -107,12 +124,13 @@ class TestServerEndpoints(unittest.TestCase):
             + req_payload
         )
 
+        user = {"id": "usr_test", "role": "user", "email": "officer@test.com"}
         with patch("app.backend.aws.bedrock_service.generate_narrative_report") as mock_report:
             mock_report.return_value = {
                 "status": "success",
                 "narrative": "AI Summary: High-velocity fan-in flow detected.",
             }
-            status, headers, body = self._execute_request(req)
+            status, headers, body = self._execute_request(req, user_override=user)
 
         self.assertEqual(status, 200)
         data = json.loads(body.decode("utf-8"))
@@ -133,9 +151,10 @@ class TestServerEndpoints(unittest.TestCase):
             + req_payload
         )
 
+        user = {"id": "usr_test", "role": "user", "email": "officer@test.com"}
         with patch("app.backend.aws.bedrock_service.generate_narrative_report") as mock_report:
-            mock_report.return_value = {"status": "success", "narrative": "??????????"}
-            status, headers, body = self._execute_request(req)
+            mock_report.return_value = {"status": "success", "narrative": "สรุปรายงาน"}
+            status, headers, body = self._execute_request(req, user_override=user)
             self.assertEqual(status, 200)
             mock_report.assert_called_once()
             self.assertEqual(mock_report.call_args[1].get("language"), "th")
@@ -150,8 +169,9 @@ class TestServerEndpoints(unittest.TestCase):
             + req_payload
         )
 
+        user = {"id": "usr_test", "role": "user", "email": "officer@test.com"}
         with patch("app.backend.aws.bedrock_service.generate_narrative_report", side_effect=RuntimeError("Offline")):
-            status, headers, body = self._execute_request(req)
+            status, headers, body = self._execute_request(req, user_override=user)
 
         self.assertEqual(status, 200)
         data = json.loads(body.decode("utf-8"))

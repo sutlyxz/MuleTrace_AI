@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 
 # Import existing engine functions
-from engine import (
+from app.backend.engine import (
     health_check,
     get_evidence,
     trace_money,

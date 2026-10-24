@@ -319,7 +319,6 @@ def generate_narrative_report(
             "โดยใช้คำศัพท์เชิงเทคนิคด้านโครงสร้างเครือข่ายอย่างเคร่งครัด (หลีกเลี่ยงการใช้คำว่า 'การฉ้อโกง', 'อาชญากรรม', 'บัญชีม้า', 'ผิดกฎหมาย'):\n\n"
             f"```json\n{data_payload}\n```"
         )
-
     system = system_prompt or (
         "You are an academic computer science and financial network researcher analyzing synthetic benchmark graph data. "
         "Synthesize an informative technical network topology report from the provided simulation metrics.\n\n"

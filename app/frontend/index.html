@@ -7,7 +7,182 @@
   <meta name="theme-color" content="#f7f5f1">
   <meta name="description" content="MuleTrace AI investigation prototype">
 
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <title>MuleTrace AI | Investigation Workspace</title>
+
+  <script>
+    (async function () {
+      try {
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { "Accept": "application/json" }
+        });
+        if (!res.ok) {
+          window.location.replace("login.html");
+          return;
+        }
+        const data = await res.json();
+        if (!data || data.status !== "success" || !data.user) {
+          window.location.replace("login.html");
+          return;
+        }
+        if (data.user.role === "admin") {
+          window.location.replace("admin.html");
+          return;
+        }
+        if (data.user.role !== "user") {
+          window.location.replace("login.html");
+          return;
+        }
+      } catch (e) {
+        window.location.replace("login.html");
+      }
+    })();
+
+    async function handleLogout() {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin"
+        });
+      } catch (e) {}
+      window.location.replace("login.html");
+    }
+  </script>
+  <style>
+    #logoutBtn.btn-logout {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      background: #ffffff !important;
+      color: #745b3e !important;
+      border: 1px solid #ded9d1 !important;
+      padding: 8px 14px !important;
+      border-radius: 9px !important;
+      font-family: inherit !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease-in-out !important;
+      white-space: nowrap !important;
+      flex: 0 0 auto !important;
+      box-shadow: 0 1px 3px rgba(70, 50, 30, 0.05) !important;
+      height: 40px !important;
+      box-sizing: border-box !important;
+    }
+    #logoutBtn.btn-logout:hover {
+      background: #fdfaf6 !important;
+      border-color: #c9ad87 !important;
+      color: #553e24 !important;
+      box-shadow: 0 3px 8px rgba(116, 91, 62, 0.12) !important;
+      transform: translateY(-1px);
+    }
+    #logoutBtn.btn-logout:active {
+      transform: translateY(0);
+      background: #f5ede2 !important;
+    }
+    #logoutBtn.btn-logout:focus-visible {
+      outline: 2px solid #9c7951 !important;
+      outline-offset: 2px !important;
+    }
+    #logoutBtn .logout-icon {
+      stroke: currentColor !important;
+      flex-shrink: 0 !important;
+      transition: transform 0.15s ease !important;
+    }
+    #logoutBtn:hover .logout-icon {
+      transform: translateX(2px) !important;
+    }
+    @media (max-width: 720px) {
+      #logoutBtn.btn-logout {
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        height: 36px !important;
+      }
+    }
+    /* Sidebar Brand Icon proportional fit with 2-line text */
+    .sidebar .brand {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      padding: 4px 6px !important;
+      line-height: 1 !important;
+    }
+    .sidebar .brand-mark {
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      display: grid !important;
+      place-items: center !important;
+      background: #e9dfd0 !important;
+      color: #745b3e !important;
+      border-radius: 9px !important;
+      font-size: 19px !important;
+      font-weight: 800 !important;
+      flex-shrink: 0 !important;
+      line-height: 1 !important;
+      user-select: none !important;
+      box-sizing: border-box !important;
+    }
+    .sidebar .brand-text {
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+      height: 36px !important;
+      box-sizing: border-box !important;
+    }
+    .sidebar .brand-name {
+      display: inline-flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: baseline !important;
+      gap: 4px !important;
+      white-space: nowrap !important;
+      font-size: 18.5px !important;
+      font-weight: 750 !important;
+      line-height: 1.15 !important;
+      color: #25251f !important;
+    }
+    .sidebar .brand-name b {
+      display: inline-block !important;
+      color: #9c7951 !important;
+      font-weight: 800 !important;
+    }
+    .sidebar .brand-text small,
+    .sidebar .brand small {
+      display: block !important;
+      margin-top: 0 !important;
+      font-size: 8px !important;
+      letter-spacing: 1.1px !important;
+      color: #777870 !important;
+      font-weight: 700 !important;
+      line-height: 1.1 !important;
+      text-transform: uppercase !important;
+      white-space: nowrap !important;
+    }
+    @media (max-width: 720px) {
+      .sidebar .brand-mark {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        font-size: 17px !important;
+        border-radius: 8px !important;
+      }
+      .sidebar .brand-text {
+        height: auto !important;
+      }
+    }
+  </style>
 
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
@@ -29,10 +204,10 @@
     <!-- เมนูด้านซ้าย -->
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">M</span>
-        <span>
-          MuleTrace <b>AI</b>
-          <small>INVESTIGATION INTELLIGENCE</small>
+        <span class="brand-mark" style="width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 19px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; background: #e9dfd0; color: #745b3e; font-weight: 800; user-select: none;">M</span>
+        <span class="brand-text" style="display: flex; flex-direction: column; justify-content: center; height: 36px; gap: 2px;">
+          <span class="brand-name" style="display: inline-flex; align-items: baseline; white-space: nowrap; font-size: 18.5px; font-weight: 750; line-height: 1.15; color: #25251f;">MuleTrace <b style="color: #9c7951; margin-left: 4px; font-weight: 800; display: inline-block;">AI</b></span>
+          <small style="display: block; margin-top: 0; font-size: 8px; letter-spacing: 1.1px; color: #777870; font-weight: 700; line-height: 1.1; text-transform: uppercase; white-space: nowrap;">INVESTIGATION INTELLIGENCE</small>
         </span>
       </div>
 
@@ -93,6 +268,15 @@
           </label>
 
           <select id="caseSelect" aria-label="เลือกเคส"></select>
+
+          <button type="button" id="logoutBtn" class="btn-logout" aria-label="ออกจากระบบ" title="ออกจากระบบ" onclick="handleLogout()">
+            <svg class="logout-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span class="logout-label">ออกจากระบบ</span>
+          </button>
         </div>
       </header>
 

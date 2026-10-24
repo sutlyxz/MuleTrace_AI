@@ -1,4 +1,3 @@
-
 "use strict";
 
 const D = window.MULETRACE_DATA;
@@ -1108,7 +1107,24 @@ function initialize() {
     );
   });
 
-  $("#runAi").addEventListener("click", () => {
+  // Logout Action
+  const logoutBtn = $("#logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin"
+        });
+      } catch (e) {
+        // Fallback
+      }
+      window.location.replace("login.html");
+    });
+  }
+
+    $("#runAi").addEventListener("click", () => {
     callAi(
       analyze(currentCase()),
       currentCase()

@@ -1,4 +1,4 @@
-"""Watch the demo CSV files for changes and trigger rule-based alerts."""
+"""Watch the demo data (CSV files or PostgreSQL) for changes and trigger rule-based alerts."""
 from __future__ import annotations
 
 import argparse
@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import time
 
+from app.backend.db.config import data_backend
 from ..services.alert_service import PROJECT_ROOT, scan_risk_alerts
 
 WATCHED_FILES = (
@@ -14,9 +15,26 @@ WATCHED_FILES = (
 )
 
 
+def _scan_errors() -> tuple[type[BaseException], ...]:
+    errors: tuple[type[BaseException], ...] = (OSError, ValueError, ImportError, RuntimeError)
+    try:
+        from sqlalchemy.exc import SQLAlchemyError
+    except ImportError:
+        return errors
+    return errors + (SQLAlchemyError,)
+
+
+def _database_signature() -> tuple:
+    """Row count + newest ingest time per table (DB has no file mtimes)."""
+    from app.backend.db.repositories import CaseRepository, TransactionRepository
+    return (TransactionRepository().change_signature(), CaseRepository().change_signature())
+
+
 def signature(paths: tuple[Path, ...] = WATCHED_FILES) -> tuple:
     """Track both transaction and case-link changes (size + nanosecond mtime)."""
-    result = []
+    if paths == WATCHED_FILES and data_backend() == 'postgres':
+        return _database_signature()
+    result: list[tuple[str, int | None, int | None]] = []
     for path in paths:
         if not path.exists():
             result.append((str(path), None, None))
@@ -36,16 +54,21 @@ def main() -> None:
         parser.error('--interval must be a positive finite number')
 
     last_signature = None
-    print('MuleTrace Auto Alert scanner started (Ctrl+C to stop)', flush=True)
+    scan_errors = _scan_errors()
+    print(f'MuleTrace Auto Alert scanner started [backend={data_backend()}] (Ctrl+C to stop)', flush=True)
     try:
         while True:
-            current = signature()
-            if current != last_signature:
+            try:
+                current = signature()
+            except scan_errors as exc:
+                print(f'[SCAN ERROR] {exc}', flush=True)
+                current = None  # force a retry on the next interval
+            if current is not None and current != last_signature:
                 try:
                     result = scan_risk_alerts()
-                except (OSError, ValueError, ImportError) as exc:
+                except scan_errors as exc:
                     print(f'[SCAN ERROR] {exc}', flush=True)
-                    # Retry after next interval even if CSV has not changed.
+                    # Retry after next interval even if data has not changed.
                 else:
                     last_signature = current
                     print(f"[SCAN] findings={result['finding_count']} "
