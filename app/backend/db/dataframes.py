@@ -13,6 +13,7 @@ from typing import Any, Iterable, Mapping
 import math
 
 import pandas as pd
+from sqlalchemy.engine import RowMapping
 
 TRANSACTION_COLUMNS = [
     "transaction_id",
@@ -42,7 +43,7 @@ def normalize_amounts(values: Iterable[Any]) -> pd.Series:
     return series
 
 
-def transactions_frame(rows: Iterable[Mapping[str, Any]]) -> pd.DataFrame:
+def transactions_frame(rows: Iterable[Mapping[str, Any] | RowMapping]) -> pd.DataFrame:
     """Build the raw transaction frame that engine.load_transactions() normalizes."""
     records = [dict(row) for row in rows]
     df = pd.DataFrame(records, columns=TRANSACTION_COLUMNS)
@@ -52,7 +53,7 @@ def transactions_frame(rows: Iterable[Mapping[str, Any]]) -> pd.DataFrame:
     return df
 
 
-def case_accounts_frame(rows: Iterable[Mapping[str, Any]]) -> pd.DataFrame:
+def case_accounts_frame(rows: Iterable[Mapping[str, Any] | RowMapping]) -> pd.DataFrame:
     """Build the case/account frame with the same string dtype read_csv uses."""
     records = [dict(row) for row in rows]
     return pd.DataFrame(records, columns=CASE_ACCOUNT_COLUMNS).astype("string")

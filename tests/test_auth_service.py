@@ -34,7 +34,7 @@ def create_in_memory_db():
     from app.backend.db.models import AuthAuditLog, AuthSession, User
     Base.metadata.create_all(
         engine,
-        tables=[User.__table__, AuthSession.__table__, AuthAuditLog.__table__],
+        tables=[Base.metadata.tables[t] for t in ("users", "auth_sessions", "auth_audit_logs")],
     )
     return engine
 
@@ -171,7 +171,7 @@ class TestAuthServiceIsolated(unittest.TestCase):
         from sqlalchemy.exc import OperationalError
 
         failing_engine = MagicMock()
-        failing_engine.connect.side_effect = OperationalError("Connection refused", None, None)
+        failing_engine.connect.side_effect = OperationalError("Connection refused", None, Exception("Connection refused"))
 
         broken_service = AuthService(engine=failing_engine)
 

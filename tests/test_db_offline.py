@@ -100,9 +100,9 @@ def _fake_repositories_module() -> types.ModuleType:
         def change_signature(self):
             return ("db:case_accounts", len(case_rows), "2026-10-22T00:00:00+00:00")
 
-    module.TransactionRepository = TransactionRepository
-    module.CaseRepository = CaseRepository
-    module.AlertRepository = FakeAlertRepository
+    setattr(module, "TransactionRepository", TransactionRepository)
+    setattr(module, "CaseRepository", CaseRepository)
+    setattr(module, "AlertRepository", FakeAlertRepository)
     return module
 
 

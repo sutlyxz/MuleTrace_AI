@@ -55,7 +55,7 @@ class TransactionRepository:
 
     def count(self) -> int:
         with self.engine.connect() as conn:
-            return int(conn.execute(select(func.count()).select_from(Transaction)).scalar_one())
+            return conn.execute(select(func.count()).select_from(Transaction)).scalar_one()
 
     def change_signature(self) -> tuple:
         """Cheap change detector for the auto scanner (row count + newest ingest time)."""
@@ -115,7 +115,7 @@ class AlertRepository:
 
     def count(self) -> int:
         with self.engine.connect() as conn:
-            return int(conn.execute(select(func.count()).select_from(Alert)).scalar_one())
+            return conn.execute(select(func.count()).select_from(Alert)).scalar_one()
 
     def insert_many(self, alerts: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         """Insert alerts in order; skip IDs that already exist (race-safe dedupe).
@@ -127,7 +127,7 @@ class AlertRepository:
             for alert in alerts:
                 tx_ids = [str(tx) for tx in alert.get("transaction_ids") or []]
                 stmt = (
-                    pg_insert(Alert.__table__)
+                    pg_insert(Alert)
                     .values(
                         alert_id=alert["alert_id"],
                         created_at=_parse_created_at(alert.get("created_at")),
@@ -141,13 +141,13 @@ class AlertRepository:
                         finding=alert.get("finding") or {},
                     )
                     .on_conflict_do_nothing(index_elements=["alert_id"])
-                    .returning(Alert.__table__.c.alert_id)
+                    .returning(Alert.alert_id)
                 )
                 if session.execute(stmt).scalar_one_or_none() is None:
                     continue
                 if tx_ids:
                     session.execute(
-                        pg_insert(AlertTransaction.__table__)
+                        pg_insert(AlertTransaction)
                         .values([
                             {"alert_id": alert["alert_id"], "transaction_id": tx}
                             for tx in dict.fromkeys(tx_ids)

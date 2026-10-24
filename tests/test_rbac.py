@@ -4,6 +4,8 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+import socket
+from socketserver import BaseServer
 import unittest
 
 from sqlalchemy import create_engine
@@ -25,7 +27,7 @@ def create_rbac_test_auth_service():
     )
     Base.metadata.create_all(
         engine,
-        tables=[User.__table__, AuthSession.__table__, AuthAuditLog.__table__],
+        tables=[Base.metadata.tables[t] for t in ("users", "auth_sessions", "auth_audit_logs")],
     )
     service = AuthService(engine=engine)
 
@@ -57,22 +59,24 @@ def create_rbac_test_auth_service():
     return service
 
 
-class DummySocket:
+class DummySocket(socket.socket):
     def __init__(self, input_bytes: bytes):
         self.rfile = io.BytesIO(input_bytes)
         self.wfile = io.BytesIO()
+        self._closed = False
 
-    def makefile(self, mode: str = "rb", buffering: int = -1):
+    def makefile(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "rb")
         if "r" in mode:
             return self.rfile
         return self.wfile
 
-    def sendall(self, b: bytes) -> None:
-        self.wfile.write(b)
+    def sendall(self, data, flags: int = 0):
+        self.wfile.write(data)
 
-    def send(self, b: bytes) -> int:
-        self.wfile.write(b)
-        return len(b)
+    def send(self, data, flags: int = 0) -> int:
+        self.wfile.write(data)
+        return len(data)
 
     def getpeername(self):
         return ("127.0.0.1", 12345)
@@ -80,8 +84,11 @@ class DummySocket:
     def getsockname(self):
         return ("127.0.0.1", 8000)
 
+    def close(self) -> None:
+        pass
 
-class DummyServer:
+
+class DummyServer(BaseServer):
     def __init__(self):
         self.server_name = "127.0.0.1"
         self.server_port = 8000
@@ -266,6 +273,7 @@ class TestPhase2RBAC(unittest.TestCase):
         # Manually expire session in DB
         with Session(self.auth_service.engine) as session:
             db_sess = session.query(AuthSession).first()
+            assert db_sess is not None
             from datetime import datetime, timezone, timedelta
             db_sess.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
             session.commit()

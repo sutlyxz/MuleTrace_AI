@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -31,7 +31,7 @@ def dispose_engines() -> None:
 
 
 @contextmanager
-def session_scope(engine: Engine | None = None) -> Iterator[Session]:
+def session_scope(engine: Engine | None = None) -> Generator[Session, None, None]:
     """Transactional scope: commit on success, rollback on any error."""
     session = Session(bind=engine or get_engine(), expire_on_commit=False)
     try:

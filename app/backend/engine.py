@@ -255,9 +255,9 @@ def get_account_profile(account_id: str) -> dict[str, Any]:
     findings = detect_risk(account_id)["findings"]
     return {
         "account_id": account_id,
-        "transaction_count": int(len(related)),
-        "incoming_count": int(len(incoming)),
-        "outgoing_count": int(len(outgoing)),
+        "transaction_count": len(related),
+        "incoming_count": len(incoming),
+        "outgoing_count": len(outgoing),
         "total_incoming": round(float(incoming["amount"].sum()), 2),
         "total_outgoing": round(float(outgoing["amount"].sum()), 2),
         "incoming_counterparties": sorted(incoming["source_account"].unique().tolist()),
@@ -386,7 +386,7 @@ def search_previous_cases(account_id: str) -> dict[str, Any]:
     matches = cases[cases["account_id"] == account_id].sort_values("case_id")
     return {
         "account_id": account_id,
-        "case_count": int(matches["case_id"].nunique()),
+        "case_count": matches["case_id"].nunique(),
         "case_ids": matches["case_id"].drop_duplicates().tolist(),
         "matches": _records(matches),
     }
@@ -475,7 +475,7 @@ def score_investigation(case_id: str | None = None, account_id: str | None = Non
         tx_ids.extend(_transaction_ids(value))
     tx_ids = list(dict.fromkeys(tx_ids))
 
-    total_finding_count = int(len(tx_findings)) + cross_case_count
+    total_finding_count = len(tx_findings) + cross_case_count
 
     return {
         "case_id": case_id,
@@ -522,7 +522,7 @@ def health_check() -> dict[str, Any]:
         except Exception as exc:  # report, never raise, from a health probe
             database = {"reachable": False, "error": type(exc).__name__}
             status = "database_unavailable"
-    result = {
+    result: dict[str, Any] = {
         "status": status,
         "transactions_file_exists": tx_file.exists(),
         "case_accounts_file_exists": CASE_ACCOUNTS_FILE.exists(),

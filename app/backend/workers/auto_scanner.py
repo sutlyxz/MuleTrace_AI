@@ -34,7 +34,7 @@ def signature(paths: tuple[Path, ...] = WATCHED_FILES) -> tuple:
     """Track both transaction and case-link changes (size + nanosecond mtime)."""
     if paths == WATCHED_FILES and data_backend() == 'postgres':
         return _database_signature()
-    result = []
+    result: list[tuple[str, int | None, int | None]] = []
     for path in paths:
         if not path.exists():
             result.append((str(path), None, None))

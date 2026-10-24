@@ -66,8 +66,8 @@ class AdminService:
 
     def list_users(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         """List user accounts with pagination. Excludes secrets and password hashes."""
-        bounded_limit = max(1, min(int(limit), 100))
-        bounded_offset = max(0, int(offset))
+        bounded_limit = max(1, min(limit, 100))
+        bounded_offset = max(0, offset)
 
         try:
             with session_scope(self._get_engine()) as session:
@@ -117,22 +117,22 @@ class AdminService:
         if role_to_check and str(role_to_check).strip().lower() == "admin":
             raise ForbiddenError("Cannot create an administrator account through this endpoint.")
 
-        if not email or not str(email).strip():
+        if not email or not email.strip():
             raise ValidationError("Email is required.")
 
-        norm_email = normalize_email(str(email))
+        norm_email = normalize_email(email)
         if not validate_email_format(norm_email):
             raise ValidationError("Invalid email address format.")
 
-        if not password or not str(password):
+        if not password or not password.strip():
             raise ValidationError("Password is required.")
 
-        is_valid, msg = validate_password_policy(str(password))
+        is_valid, msg = validate_password_policy(password)
         if not is_valid:
             raise ValidationError(msg)
 
-        dname = str(display_name).strip() if display_name and str(display_name).strip() else norm_email.split("@")[0]
-        p_hash = hash_password(str(password))
+        dname = display_name.strip() if display_name and display_name.strip() else norm_email.split("@")[0]
+        p_hash = hash_password(password)
 
         try:
             with session_scope(self._get_engine()) as session:
@@ -266,14 +266,14 @@ class AdminService:
         """
         effective_actor_id = admin_actor_id or actor_id or ""
 
-        if not new_password or not str(new_password):
+        if not new_password or not new_password.strip():
             raise ValidationError("New password is required.")
 
-        is_valid, msg = validate_password_policy(str(new_password))
+        is_valid, msg = validate_password_policy(new_password)
         if not is_valid:
             raise ValidationError(msg)
 
-        p_hash = hash_password(str(new_password))
+        p_hash = hash_password(new_password)
 
         try:
             with session_scope(self._get_engine()) as session:
@@ -320,8 +320,8 @@ class AdminService:
 
     def list_audit_logs(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         """View sanitized security audit logs with pagination in newest-first order."""
-        bounded_limit = max(1, min(int(limit), 100))
-        bounded_offset = max(0, int(offset))
+        bounded_limit = max(1, min(limit, 100))
+        bounded_offset = max(0, offset)
 
         try:
             with session_scope(self._get_engine()) as session:

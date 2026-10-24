@@ -30,7 +30,7 @@ def normalize_email(email: str) -> str:
     """Normalize email address to lowercase and trimmed string."""
     if not email:
         return ""
-    return str(email).strip().lower()
+    return email.strip().lower()
 
 
 def validate_email_format(email: str) -> bool:

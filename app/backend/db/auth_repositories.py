@@ -6,6 +6,7 @@ import uuid
 from typing import Any, Tuple
 
 from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.backend.auth.security import normalize_email
@@ -35,7 +36,8 @@ class UserRepository:
 
     def count_admins(self) -> int:
         stmt = select(func.count()).select_from(User).where(User.role == "admin", User.is_active == True)
-        return int(self.session.execute(stmt).scalar_one() or 0)
+        count_val = self.session.execute(stmt).scalar_one()
+        return count_val if count_val else 0
 
     def create_user(
         self,
@@ -71,7 +73,8 @@ class UserRepository:
 
     def list_users(self, limit: int = 50, offset: int = 0) -> Tuple[list[User], int]:
         count_stmt = select(func.count()).select_from(User)
-        total = int(self.session.execute(count_stmt).scalar_one() or 0)
+        count_val = self.session.execute(count_stmt).scalar_one()
+        total = count_val if count_val else 0
 
         stmt = (
             select(User)
@@ -127,7 +130,9 @@ class SessionRepository:
             .values(revoked_at=now)
         )
         result = self.session.execute(stmt)
-        return result.rowcount > 0
+        if isinstance(result, CursorResult):
+            return result.rowcount > 0
+        return False
 
     def revoke_all_user_sessions(self, user_id: str) -> int:
         now = datetime.now(timezone.utc)
@@ -137,7 +142,9 @@ class SessionRepository:
             .values(revoked_at=now)
         )
         result = self.session.execute(stmt)
-        return int(result.rowcount)
+        if isinstance(result, CursorResult):
+            return result.rowcount
+        return 0
 
 
 class AuditLogRepository:
@@ -177,7 +184,8 @@ class AuditLogRepository:
 
     def list_logs(self, limit: int = 50, offset: int = 0) -> Tuple[list[AuthAuditLog], int]:
         count_stmt = select(func.count()).select_from(AuthAuditLog)
-        total = int(self.session.execute(count_stmt).scalar_one() or 0)
+        count_val = self.session.execute(count_stmt).scalar_one()
+        total = count_val if count_val else 0
 
         stmt = (
             select(AuthAuditLog)

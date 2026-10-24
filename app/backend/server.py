@@ -562,13 +562,23 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                 display_name = payload.get("display_name")
                 role_override = payload.get("role")
 
+                if not isinstance(email, str) or not email.strip():
+                    self._send_json_response({"status": "error", "message": "Email is required."}, 400)
+                    return
+                if not isinstance(password, str) or not password:
+                    self._send_json_response({"status": "error", "message": "Password is required."}, 400)
+                    return
+
+                dname = str(display_name) if display_name is not None else None
+                role_val = str(role_override) if role_override is not None else None
+
                 try:
                     user_data = self.admin_service.create_bank_officer(
                         admin_actor_id=admin_user["id"],
                         email=email,
                         password=password,
-                        display_name=display_name,
-                        client_supplied_role=role_override,
+                        display_name=dname,
+                        client_supplied_role=role_val,
                     )
                     self._send_json_response({"status": "success", "user": user_data}, 201)
                 except AdminValidationError as err:
@@ -588,6 +598,9 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
             if reset_match:
                 target_user_id = reset_match.group(1)
                 new_password = payload.get("new_password") or payload.get("password")
+                if not isinstance(new_password, str) or not new_password:
+                    self._send_json_response({"status": "error", "message": "New password is required."}, 400)
+                    return
 
                 try:
                     result = self.admin_service.reset_user_password(
@@ -710,6 +723,9 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
             if status_match:
                 target_user_id = status_match.group(1)
                 is_active = payload.get("is_active")
+                if not isinstance(is_active, bool):
+                    self._send_json_response({"status": "error", "message": "is_active must be a boolean."}, 400)
+                    return
 
                 try:
                     user_data = self.admin_service.set_user_status(

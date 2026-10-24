@@ -25,7 +25,7 @@ class AlertTests(unittest.TestCase):
 
     def _scan(self, findings):
         fake = types.ModuleType('app.backend.engine')
-        fake.detect_risk = lambda: {'count': len(findings), 'findings': findings}
+        setattr(fake, 'detect_risk', lambda: {'count': len(findings), 'findings': findings})
         with patch.dict(sys.modules, {'app.backend.engine': fake}):
             return scan_risk_alerts(self.path)
 

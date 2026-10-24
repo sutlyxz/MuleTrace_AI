@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
+import socket
+from socketserver import BaseServer
 import unittest
 from unittest.mock import patch
 
@@ -34,31 +37,37 @@ from app.backend.server import MuleTraceRequestHandler
 from app.backend.services.auth_service import AuthService, LoginRateLimiter
 
 
-class DummySocket:
+class DummySocket(socket.socket):
     def __init__(self, input_bytes: bytes, client_ip: str = "127.0.0.1"):
         self.rfile = io.BytesIO(input_bytes)
         self.wfile = io.BytesIO()
         self.client_ip = client_ip
+        self._closed = False
 
-    def makefile(self, mode: str = "rb", buffering: int = -1):
+    def makefile(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "rb")
         if "r" in mode:
             return self.rfile
         return self.wfile
 
-    def sendall(self, b: bytes) -> None:
-        self.wfile.write(b)
+    def sendall(self, data, flags: int = 0):
+        self.wfile.write(data)
 
-    def send(self, b: bytes) -> int:
-        self.wfile.write(b)
-        return len(b)
+    def send(self, data, flags: int = 0) -> int:
+        self.wfile.write(data)
+        return len(data)
 
     def getpeername(self):
         return (self.client_ip, 12345)
 
+    def getsockname(self):
+        return ("127.0.0.1", 8000)
 
-from pathlib import Path
+    def close(self) -> None:
+        pass
 
-class DummyServer:
+
+class DummyServer(BaseServer):
     def __init__(self):
         self.server_name = "127.0.0.1"
         self.server_port = 8000
@@ -77,7 +86,7 @@ class TestErrorPagesAndAuthUX(unittest.TestCase):
         )
         Base.metadata.create_all(
             cls.engine,
-            tables=[User.__table__, AuthSession.__table__, AuthAuditLog.__table__],
+            tables=[Base.metadata.tables[t] for t in ("users", "auth_sessions", "auth_audit_logs")],
         )
         rate_limiter = LoginRateLimiter(max_attempts=10, window_seconds=900)
         cls.auth_service = AuthService(engine=cls.engine, rate_limiter=rate_limiter)

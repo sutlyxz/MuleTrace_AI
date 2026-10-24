@@ -58,7 +58,8 @@ def read_transactions(path: Path, plan: SeedPlan) -> None:
         tx_id = _clean(raw.get("transaction_id"))
         source = _clean(raw.get("source_account"))
         target = _clean(raw.get("target_account"))
-        timestamp = pd.to_datetime(_clean(raw.get("timestamp")) or None, errors="coerce")
+        raw_ts = _clean(raw.get("timestamp"))
+        timestamp = pd.to_datetime(raw_ts, errors="coerce") if raw_ts else pd.NaT
         try:
             amount = Decimal(_clean(raw.get("amount")))
         except InvalidOperation:
@@ -66,7 +67,8 @@ def read_transactions(path: Path, plan: SeedPlan) -> None:
         if not tx_id or not source or not target or pd.isna(timestamp) or amount is None:
             plan.skipped.append(f"{path.name}:{line_no} invalid/missing required value")
             continue
-        if amount.as_tuple().exponent < -2 or amount < 0:
+        exp = amount.as_tuple().exponent
+        if not isinstance(exp, int) or exp < -2 or amount < 0:
             plan.skipped.append(f"{path.name}:{line_no} amount {amount} not NUMERIC(18,2) >= 0")
             continue
         row = {
@@ -199,15 +201,15 @@ def apply_plan(plan: SeedPlan, engine, dry_run: bool = False) -> dict[str, Any]:
 
         if not dry_run:
             if new_accounts:
-                session.execute(pg_insert(Account.__table__).on_conflict_do_nothing(),
+                session.execute(pg_insert(Account).on_conflict_do_nothing(),
                                 [{"account_id": a} for a in new_accounts])
             if new_cases:
-                session.execute(pg_insert(Case.__table__).on_conflict_do_nothing(),
+                session.execute(pg_insert(Case).on_conflict_do_nothing(),
                                 [{"case_id": c} for c in new_cases])
             if new_tx:
-                session.execute(pg_insert(Transaction.__table__).on_conflict_do_nothing(), new_tx)
+                session.execute(pg_insert(Transaction).on_conflict_do_nothing(), new_tx)
             if new_links:
-                session.execute(pg_insert(CaseAccount.__table__).on_conflict_do_nothing(),
+                session.execute(pg_insert(CaseAccount).on_conflict_do_nothing(),
                                 [{"case_id": c, "account_id": a} for c, a in new_links])
 
     inserted_alerts = new_alerts
