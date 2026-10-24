@@ -110,6 +110,95 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
         ".py", ".env", ".csv", ".bat", ".sh", ".yml", ".yaml", ".ini", ".md", ".git"
     )
 
+
+    def _get_aws_credentials_status(self) -> dict[str, Any]:
+        key_id = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
+        secret = os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
+        sess = os.environ.get("AWS_SESSION_TOKEN", "").strip()
+        region = (
+            os.environ.get("AWS_REGION")
+            or os.environ.get("AWS_DEFAULT_REGION")
+            or "us-east-1"
+        ).strip()
+        configured = bool(key_id and secret)
+        masked = f"{key_id[:4]}...{key_id[-4:]}" if len(key_id) >= 8 else ("Configured" if configured else "Not Set")
+        return {
+            "status": "success",
+            "configured": configured,
+            "masked_key_id": masked,
+            "region": region,
+            "has_session": bool(sess),
+        }
+
+    def _update_aws_credentials(self, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+        raw_text = str(payload.get("raw_text") or "").strip()
+        access_key = str(payload.get("access_key_id") or "").strip()
+        secret_key = str(payload.get("secret_access_key") or "").strip()
+        session_val = str(payload.get("session_value") or "").strip()
+        region_val = str(payload.get("region") or "").strip()
+
+        if raw_text:
+            for line in raw_text.splitlines():
+                cleaned = line.strip()
+                if not cleaned or cleaned.startswith("#") or cleaned.startswith("["):
+                    continue
+                for prefix in ("export ", "set ", "$env:"):
+                    if cleaned.lower().startswith(prefix):
+                        cleaned = cleaned[len(prefix):].strip()
+                if "=" not in cleaned:
+                    continue
+                k, v = cleaned.split("=", 1)
+                k_low = k.strip().lower()
+                v_clean = v.strip().strip('"').strip("'")
+                if k_low in ("aws_access_key_id", "access_key_id"):
+                    access_key = v_clean
+                elif k_low in ("aws_secret_access_key", "secret_access_key"):
+                    secret_key = v_clean
+                elif k_low in ("aws_session_token", "session_token", "session_value"):
+                    session_val = v_clean
+                elif k_low in ("aws_region", "aws_default_region", "region"):
+                    region_val = v_clean
+
+        if not access_key or not secret_key:
+            return {
+                "status": "error",
+                "message": "AWS Access Key ID and Secret Access Key are required.",
+            }, 400
+
+        effective_region = region_val or os.environ.get("AWS_REGION") or "us-east-1"
+        os.environ["AWS_ACCESS_KEY_ID"] = access_key
+        os.environ["AWS_SECRET_ACCESS_KEY"] = secret_key
+        os.environ["AWS_REGION"] = effective_region
+        os.environ["AWS_DEFAULT_REGION"] = effective_region
+        if session_val:
+            os.environ["AWS_SESSION_TOKEN"] = session_val
+        elif access_key.startswith("AKIA"):
+            os.environ.pop("AWS_SESSION_TOKEN", None)
+
+        os.environ["MULETRACE_SIMULATION_TRANSPORT"] = "eventbridge"
+
+        try:
+            import tempfile
+            runtime_file = Path(tempfile.gettempdir()) / "muletrace_aws_runtime.json"
+            runtime_file.write_text(
+                json.dumps(
+                    {
+                        "AWS_ACCESS_KEY_ID": access_key,
+                        "AWS_SECRET_ACCESS_KEY": secret_key,
+                        "AWS_SESSION_TOKEN": session_val,
+                        "AWS_REGION": effective_region,
+                        "AWS_DEFAULT_REGION": effective_region,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+        status_info = self._get_aws_credentials_status()
+        status_info["message"] = f"AWS Credentials updated ({status_info['masked_key_id']})"
+        return status_info, 200
+
     def _normalize_path(self) -> str:
         """Strip query string, resolve duplicate slashes, and trim trailing slashes."""
         raw_path = urllib.parse.urlsplit(self.path).path
@@ -377,7 +466,18 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json_response({"status": "error", "message": "Failed to list audit logs"}, 500)
                 return
 
+            if clean_lower == "/api/admin/aws-credentials":
+                self._send_json_response(self._get_aws_credentials_status(), 200)
+                return
+
             self._send_json_response({"status": "error", "message": "Admin endpoint not found"}, 404)
+            return
+
+        if clean_lower == "/api/aws/credentials":
+            user = self._require_auth()
+            if user is None:
+                return
+            self._send_json_response(self._get_aws_credentials_status(), 200)
             return
 
         # 3b. Simulation Run Status API (Requires authenticated role)
@@ -737,7 +837,23 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
                     self._send_json_response({"status": "error", "message": "Failed to reset password"}, 500)
                 return
 
+            if clean_path == "/api/admin/aws-credentials":
+                res_data, code = self._update_aws_credentials(payload)
+                self._send_json_response(res_data, code)
+                return
+
             self._send_json_response({"status": "error", "message": "Admin endpoint not found"}, 404)
+            return
+
+        if clean_path == "/api/aws/credentials":
+            user = self._require_auth()
+            if user is None:
+                return
+            if not self._is_safe_origin():
+                self._send_json_response({"status": "error", "message": "CSRF verification failed"}, 403)
+                return
+            res_data, code = self._update_aws_credentials(payload)
+            self._send_json_response(res_data, code)
             return
 
         # 4. Investigation API: AI Summary Narrative (Requires 'user' role; admin is denied)
@@ -1043,6 +1159,16 @@ def run_server(port: int = 8000, bind: str = "127.0.0.1", directory: Path | str 
     # Load private environment (.env)
     env = load_environment(PROJECT_ROOT)
     os.environ.update(env)
+    try:
+        import tempfile
+        runtime_file = Path(tempfile.gettempdir()) / "muletrace_aws_runtime.json"
+        if runtime_file.is_file():
+            saved_creds = json.loads(runtime_file.read_text(encoding="utf-8"))
+            for k, v in saved_creds.items():
+                if v:
+                    os.environ[k] = str(v)
+    except Exception:
+        pass
     if not os.environ.get("MULETRACE_SIMULATION_TRANSPORT", "").strip():
         if os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROFILE"):
             os.environ["MULETRACE_SIMULATION_TRANSPORT"] = "eventbridge"

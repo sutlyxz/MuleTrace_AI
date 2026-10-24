@@ -161,6 +161,36 @@
         </div>
       </div>
 
+      <!-- AWS Cloud Credentials Hot-Reload Card -->
+      <div class="content-card" id="awsCredentialsCard" style="margin-bottom: 24px;">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <div class="section-title-with-badge">
+              <h2>ตั้งค่าการเชื่อมต่อ AWS Cloud (AWS Credentials Hot-Reload)</h2>
+              <span class="badge badge-active" id="awsCredStatusBadge">กำลังตรวจสอบ...</span>
+            </div>
+            <p>วางข้อมูล AWS CLI / AWS Academy ([default]) เพื่ออัปเดต Key ให้เซิร์ฟเวอร์ทันทีโดยไม่ต้องรีสตาร์ท</p>
+          </div>
+        </div>
+        <div style="padding: 18px 24px; display: flex; flex-direction: column; gap: 12px;">
+          <label for="awsRawInput" style="font-size: 13px; font-weight: 600; color: #3a362e;">
+            วาง AWS Credentials Block ([default] หรือ AWS_ACCESS_KEY_ID=...)
+          </label>
+          <textarea
+            id="awsRawInput"
+            rows="4"
+            placeholder="[default]&#10;aws_access_key_id=ASIA...&#10;aws_secret_access_key=..."
+            style="width: 100%; font-family: monospace; font-size: 12.5px; padding: 10px 12px; border: 1px solid #d8d1c5; border-radius: 9px; background: #fcfaf7; box-sizing: border-box;"
+          ></textarea>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <span id="awsCredFeedback" style="font-size: 13px; color: #5c5549;"></span>
+            <button type="button" id="saveAwsCredsBtn" class="btn btn-primary">
+              บันทึกและอัปเดต AWS Key ทันที
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Recent Security Events Card -->
       <div class="content-card">
         <div class="card-header-bar">

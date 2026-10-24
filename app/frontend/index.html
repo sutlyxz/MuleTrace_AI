@@ -550,9 +550,32 @@
                 ไม่ได้เรียก Bedrock อัตโนมัติ
               </p>
 
-              <button class="btn subtle" id="runAi">
-                ขอ AI Summary ผ่าน API
-              </button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <button class="btn subtle" id="runAi">
+                  ขอ AI Summary ผ่าน API
+                </button>
+                <button type="button" class="btn subtle" id="toggleAwsKeyBox">
+                  ⚙️ อัปเดต AWS Key
+                </button>
+              </div>
+
+              <div id="awsKeyPanel" hidden style="margin-top: 12px; padding: 12px; border: 1px solid #e2dbd0; border-radius: 10px; background: #fbf9f5;">
+                <label for="dashboardAwsRawInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #554838;">
+                  วาง AWS Credentials ([default] จาก AWS Academy) เพื่ออัปเดตทันที:
+                </label>
+                <textarea
+                  id="dashboardAwsRawInput"
+                  rows="4"
+                  placeholder="[default]&#10;aws_access_key_id=ASIA...&#10;aws_secret_access_key=...&#10;aws_session_token=..."
+                  style="width: 100%; font-family: monospace; font-size: 12px; padding: 8px 10px; border: 1px solid #d8d1c5; border-radius: 8px; box-sizing: border-box; margin-bottom: 8px;"
+                ></textarea>
+                <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                  <small id="dashboardAwsKeyStatus" style="color: #554838;"></small>
+                  <button type="button" class="btn primary" id="saveDashboardAwsKeyBtn" style="padding: 7px 14px; font-size: 12.5px;">
+                    บันทึก AWS Key
+                  </button>
+                </div>
+              </div>
 
               <div id="aiResult" class="ai-result" aria-live="polite">
                 ยังไม่ได้เชื่อม AWS · ใช้รายงานแบบ Rule-based ได้

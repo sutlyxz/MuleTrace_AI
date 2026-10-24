@@ -1321,12 +1321,72 @@ function initialize() {
     });
   }
 
-    $("#runAi").addEventListener("click", () => {
+  $("#runAi").addEventListener("click", () => {
     callAi(
       analyze(currentCase()),
       currentCase()
     );
   });
+
+  const toggleAwsKeyBtn = $("#toggleAwsKeyBox");
+  const awsKeyPanel = $("#awsKeyPanel");
+  const saveDashboardAwsKeyBtn = $("#saveDashboardAwsKeyBtn");
+  const dashboardAwsRawInput = $("#dashboardAwsRawInput");
+  const dashboardAwsKeyStatus = $("#dashboardAwsKeyStatus");
+
+  if (toggleAwsKeyBtn && awsKeyPanel) {
+    toggleAwsKeyBtn.addEventListener("click", async () => {
+      awsKeyPanel.hidden = !awsKeyPanel.hidden;
+      if (!awsKeyPanel.hidden && dashboardAwsKeyStatus) {
+        try {
+          const r = await fetch("/api/aws/credentials", { credentials: "same-origin" });
+          if (r.ok) {
+            const d = await r.json();
+            dashboardAwsKeyStatus.textContent = d.configured
+              ? `Key ปัจจุบัน: ${d.masked_key_id} (${d.region})`
+              : "ยังไม่ได้ตั้งค่า AWS Key";
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  if (saveDashboardAwsKeyBtn && dashboardAwsRawInput) {
+    saveDashboardAwsKeyBtn.addEventListener("click", async () => {
+      const rawText = dashboardAwsRawInput.value.trim();
+      if (!rawText) {
+        if (dashboardAwsKeyStatus) {
+          dashboardAwsKeyStatus.textContent = "กรุณาวาง AWS Credentials ก่อนบันทึก";
+        }
+        return;
+      }
+      saveDashboardAwsKeyBtn.disabled = true;
+      try {
+        const r = await fetch("/api/aws/credentials", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raw_text: rawText })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.status === "success") {
+          dashboardAwsRawInput.value = "";
+          if (dashboardAwsKeyStatus) {
+            dashboardAwsKeyStatus.textContent = `✓ อัปเดตสำเร็จ: ${d.masked_key_id} (${d.region})`;
+          }
+          $("#awsStatus").textContent = `KEY READY (${d.masked_key_id})`;
+        } else if (dashboardAwsKeyStatus) {
+          dashboardAwsKeyStatus.textContent = d.message || "อัปเดต Key ไม่สำเร็จ";
+        }
+      } catch (_) {
+        if (dashboardAwsKeyStatus) {
+          dashboardAwsKeyStatus.textContent = "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ";
+        }
+      } finally {
+        saveDashboardAwsKeyBtn.disabled = false;
+      }
+    });
+  }
     window.MuleI18N?.init();
   render();
 

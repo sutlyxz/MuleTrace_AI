@@ -1436,6 +1436,80 @@
   // Initialization
   // ==========================================================================
 
+
+  async function loadAwsCredentialsStatus() {
+    const badge = document.getElementById("awsCredStatusBadge");
+    if (!badge) return;
+    try {
+      const res = await fetch("/api/admin/aws-credentials", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.configured) {
+        badge.className = "badge badge-active";
+        badge.textContent = `AWS Key: ${data.masked_key_id} (${data.region || "us-east-1"})`;
+      } else {
+        badge.className = "badge badge-disabled";
+        badge.textContent = "AWS Key: Not Configured";
+      }
+    } catch (_) {}
+  }
+
+  async function handleSaveAwsCredentials() {
+    const rawEl = document.getElementById("awsRawInput");
+    const btnEl = document.getElementById("saveAwsCredsBtn");
+    const fbEl = document.getElementById("awsCredFeedback");
+    if (!rawEl || !btnEl) return;
+
+    const rawText = rawEl.value.trim();
+    if (!rawText) {
+      if (fbEl) {
+        fbEl.style.color = "#a13a2e";
+        fbEl.textContent = "กรุณาวางข้อมูล AWS Credentials ก่อนกดบันทึก";
+      }
+      return;
+    }
+
+    btnEl.disabled = true;
+    try {
+      const res = await fetch("/api/admin/aws-credentials", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ raw_text: rawText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== "success") {
+        if (fbEl) {
+          fbEl.style.color = "#a13a2e";
+          fbEl.textContent = data.message || "ไม่สามารถอัปเดต AWS Key ได้";
+        }
+        showToast(data.message || "อัปเดต AWS Key ไม่สำเร็จ", "error");
+        return;
+      }
+      rawEl.value = "";
+      if (fbEl) {
+        fbEl.style.color = "#275649";
+        fbEl.textContent = `อัปเดตสำเร็จ: ${data.masked_key_id} (${data.region})`;
+      }
+      showToast(`อัปเดต AWS Key (${data.masked_key_id}) เรียบร้อยแล้ว`, "success");
+      await loadAwsCredentialsStatus();
+    } catch (_) {
+      showToast("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์", "error");
+    } finally {
+      btnEl.disabled = false;
+    }
+  }
+
   bindEvents();
-  verifySession();
+  const saveAwsBtn = document.getElementById("saveAwsCredsBtn");
+  if (saveAwsBtn) {
+    saveAwsBtn.addEventListener("click", handleSaveAwsCredentials);
+  }
+  verifySession().then(() => {
+    loadAwsCredentialsStatus();
+  });
 })();
