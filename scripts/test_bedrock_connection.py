@@ -65,6 +65,29 @@ def run_diagnostics(target_case: str = 'CASE001', target_account: str | None = N
     if session_token:
         print(f"[+] Session Token  : Present (AWS SSO / Temporary STS)")
 
+    # 3b. Verify Credentials with STS
+    print("\n[*] Verifying AWS identity with AWS STS...")
+    try:
+        import boto3
+        session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            aws_session_token=session_token or None,
+            region_name=region,
+        )
+        sts = session.client("sts")
+        identity = sts.get_caller_identity()
+        print(f"[+] Authenticated AWS Account : {identity.get('Account')}")
+        print(f"[+] IAM Identity ARN          : {identity.get('Arn')}")
+    except Exception as exc:
+        err_msg = str(exc)
+        if "ExpiredToken" in err_msg:
+            print("\n[!] ERROR: The AWS session token in your '.env' is EXPIRED (ExpiredToken).")
+            print("    -> Temporary AWS SSO / AWS Academy tokens typically expire after 1-12 hours.")
+            print("    -> Update .env or use the Admin Portal (admin.html) to paste your active credentials.\n")
+            return 1
+        print(f"\n[!] Warning: STS identity check reported: {exc}\n")
+
     # 4. Initialize Client & Invoke
     print("\n[*] Connecting to AWS Bedrock...")
     try:

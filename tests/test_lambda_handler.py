@@ -36,10 +36,11 @@ class TestLambdaHandler(unittest.TestCase):
             "httpMethod": "GET",
             "path": "/cases",
         }
-        res = lambda_handler(event)
-        self.assertEqual(res["statusCode"], 200)
-        body = json.loads(res["body"])
-        self.assertIn("cases", body)
+        with patch("app.backend.aws.lambda_handler.get_investigation_alert", return_value=None):
+            res = lambda_handler(event)
+            self.assertEqual(res["statusCode"], 200)
+            body = json.loads(res["body"])
+            self.assertIn("cases", body)
 
     def test_lambda_static_login_asset(self):
         event = {
@@ -101,6 +102,80 @@ class TestLambdaHandler(unittest.TestCase):
             "headers": {"cookie": cookie_header + "tampered"},
         }
         self.assertEqual(lambda_handler(tampered_event)["statusCode"], 401)
+    def test_lambda_admin_user_crud_and_login_flow(self):
+        # 1. Create a brand new Bank Officer
+        create_event = {
+            "httpMethod": "POST",
+            "path": "/api/admin/users",
+            "body": json.dumps({
+                "email": "new.officer@bank.go.th",
+                "password": "SecurePassword123!@#",
+                "display_name": "Special Agent Somchai",
+            }),
+        }
+        create_res = lambda_handler(create_event)
+        self.assertEqual(create_res["statusCode"], 201)
+        created_data = json.loads(create_res["body"])
+        self.assertEqual(created_data["status"], "success")
+        new_user = created_data["user"]
+        self.assertEqual(new_user["email"], "new.officer@bank.go.th")
+        user_id = new_user["id"]
+
+        # 2. Log in with the newly created user!
+        new_login_event = {
+            "httpMethod": "POST",
+            "path": "/api/auth/login",
+            "body": json.dumps({
+                "email": "new.officer@bank.go.th",
+                "password": "SecurePassword123!@#",
+            }),
+        }
+        login_res = lambda_handler(new_login_event)
+        self.assertEqual(login_res["statusCode"], 200)
+        login_data = json.loads(login_res["body"])
+        self.assertEqual(login_data["status"], "success")
+        self.assertEqual(login_data["user"]["role"], "user")
+
+        # 3. Deactivate the new user
+        deactivate_event = {
+            "httpMethod": "PATCH",
+            "path": f"/api/admin/users/{user_id}/status",
+            "body": json.dumps({"is_active": False}),
+        }
+        deact_res = lambda_handler(deactivate_event)
+        self.assertEqual(deact_res["statusCode"], 200)
+
+        # 4. Deactivated user cannot log in
+        blocked_res = lambda_handler(new_login_event)
+        self.assertEqual(blocked_res["statusCode"], 401)
+
+        # 5. Reset password
+        reset_event = {
+            "httpMethod": "POST",
+            "path": f"/api/admin/users/{user_id}/reset-password",
+            "body": json.dumps({"new_password": "BrandNewPassword999!@#"}),
+        }
+        reset_res = lambda_handler(reset_event)
+        self.assertEqual(reset_res["statusCode"], 200)
+
+        # 6. Reactivate user
+        reactivate_event = {
+            "httpMethod": "PATCH",
+            "path": f"/api/admin/users/{user_id}/status",
+            "body": json.dumps({"is_active": True}),
+        }
+        self.assertEqual(lambda_handler(reactivate_event)["statusCode"], 200)
+
+        # 7. Log in with the new password
+        success_after_reset = {
+            "httpMethod": "POST",
+            "path": "/api/auth/login",
+            "body": json.dumps({
+                "email": "new.officer@bank.go.th",
+                "password": "BrandNewPassword999!@#",
+            }),
+        }
+        self.assertEqual(lambda_handler(success_after_reset)["statusCode"], 200)
     def test_lambda_api_gateway_ai_summary(self):
         event = {
             "httpMethod": "POST",

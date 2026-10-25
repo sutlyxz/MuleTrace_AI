@@ -72,6 +72,7 @@ MIME_MAP = {
     ".txt": "text/plain; charset=utf-8",
 }
 
+import os
 import base64
 import hashlib
 import hmac
@@ -90,22 +91,100 @@ def _verify_password_pbkdf2(password: str, expected_hex: str) -> bool:
     computed = _hash_password_pbkdf2(password)
     return hmac.compare_digest(computed, expected_hex)
 
-_DEMO_USERS = {
+_DEFAULT_USERS = {
     "officer@agency.go.th": {
-        "id": "usr_officer",
+        "id": "usr_officer_default",
+        "email": "officer@agency.go.th",
         "password_hash": "fee601524ac174b438832d6b0a94ab63e8b9a3ae60180e5cb39288894aadfdb8",
         "role": "user",
         "name": "Bank Officer",
         "department": "AML Investigation",
+        "is_active": True,
+        "created_at": "2026-10-25T00:00:00Z",
     },
     "admin@agency.go.th": {
-        "id": "usr_admin",
+        "id": "usr_admin_default",
+        "email": "admin@agency.go.th",
         "password_hash": "f9ac3df11ab23f163b1548406355a10f0039de6983f4e55d80b52cbfd01f295d",
         "role": "admin",
         "name": "System Administrator",
         "department": "IT Security & Operations",
+        "is_active": True,
+        "created_at": "2026-10-25T00:00:00Z",
     },
 }
+
+_USERS_CACHE: dict[str, dict[str, Any]] = dict(_DEFAULT_USERS)
+_AUDIT_LOGS_CACHE: list[dict[str, Any]] = [
+    {
+        "id": "log_init",
+        "action": "SERVERLESS_DEPLOY",
+        "admin_email": "aws-lambda@system",
+        "target_email": "system",
+        "created_at": "2026-10-25 04:30:00",
+        "details": "Active IAM Role & Serverless User Registry Initialized",
+    }
+]
+
+def _load_users_from_storage() -> dict[str, dict[str, Any]]:
+    global _USERS_CACHE
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return _USERS_CACHE
+    try:
+        from .s3_service import get_s3_client
+        s3 = get_s3_client()
+        obj = s3.get_object(Bucket="muletrace-reports-598122632336", Key="auth/users_registry.json")
+        loaded = json.loads(obj["Body"].read().decode("utf-8"))
+        if isinstance(loaded, dict):
+            _USERS_CACHE = {**_DEFAULT_USERS, **loaded}
+    except Exception:
+        pass
+    return _USERS_CACHE
+
+def _save_users_to_storage() -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return
+    try:
+        from .s3_service import get_s3_client
+        s3 = get_s3_client()
+        s3.put_object(
+            Bucket="muletrace-reports-598122632336",
+            Key="auth/users_registry.json",
+            Body=json.dumps(_USERS_CACHE, ensure_ascii=False, indent=2).encode("utf-8"),
+            ContentType="application/json; charset=utf-8",
+        )
+    except Exception:
+        pass
+
+def _load_audit_logs_from_storage() -> list[dict[str, Any]]:
+    global _AUDIT_LOGS_CACHE
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return _AUDIT_LOGS_CACHE
+    try:
+        from .s3_service import get_s3_client
+        s3 = get_s3_client()
+        obj = s3.get_object(Bucket="muletrace-reports-598122632336", Key="auth/audit_logs.json")
+        loaded = json.loads(obj["Body"].read().decode("utf-8"))
+        if isinstance(loaded, list):
+            _AUDIT_LOGS_CACHE = loaded
+    except Exception:
+        pass
+    return _AUDIT_LOGS_CACHE
+
+def _save_audit_logs_to_storage() -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return
+    try:
+        from .s3_service import get_s3_client
+        s3 = get_s3_client()
+        s3.put_object(
+            Bucket="muletrace-reports-598122632336",
+            Key="auth/audit_logs.json",
+            Body=json.dumps(_AUDIT_LOGS_CACHE, ensure_ascii=False, indent=2).encode("utf-8"),
+            ContentType="application/json; charset=utf-8",
+        )
+    except Exception:
+        pass
 
 def _create_session_token(payload: dict[str, Any]) -> str:
     payload_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
@@ -130,12 +209,16 @@ def _verify_session_token(token: str | None) -> dict[str, Any] | None:
         return None
 
 def _extract_cookie_token(event: dict[str, Any]) -> str | None:
+    headers = event.get("headers") or {}
+    auth_hdr = headers.get("authorization") or headers.get("Authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        return auth_hdr.split(" ", 1)[1].strip()
+
     cookies = event.get("cookies") or []
     for c in cookies:
         if c.startswith("muletrace_session="):
             return c.split("=", 1)[1].split(";", 1)[0].strip()
 
-    headers = event.get("headers") or {}
     cookie_hdr = headers.get("cookie") or headers.get("Cookie") or ""
     if "muletrace_session=" in cookie_hdr:
         for part in cookie_hdr.split(";"):
@@ -213,13 +296,18 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
             return asset_res
 
     # 1c. Secure Authentication API
+    users = _load_users_from_storage()
+
     if path == "/api/auth/login" and method == "POST":
         body = _extract_body(event)
         email = (body.get("email") or "").strip().lower()
         pwd = body.get("password") or ""
-        u = _DEMO_USERS.get(email)
-        if not u or not _verify_password_pbkdf2(pwd, u["password_hash"]):
+        u = users.get(email)
+        if not u or not _verify_password_pbkdf2(pwd, u.get("password_hash", "")):
             return _response(401, {"status": "error", "message": "Invalid email or password"})
+
+        if not u.get("is_active", True):
+            return _response(401, {"status": "error", "message": "Account has been deactivated by administrator."})
 
         user_data = {
             "id": u["id"],
@@ -244,6 +332,7 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
             "cookies": [cookie_val],
             "body": json.dumps({
                 "status": "success",
+                "token": raw_token,
                 "user": user_data,
             }, ensure_ascii=False),
         }
@@ -255,6 +344,12 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
         payload = _verify_session_token(token)
         if not payload:
             return _response(401, {"status": "error", "message": "Invalid or expired session"})
+        
+        email = payload.get("email", "").lower()
+        live_user = users.get(email)
+        if live_user and not live_user.get("is_active", True):
+            return _response(401, {"status": "error", "message": "Account deactivated"})
+
         return _response(200, {
             "status": "success",
             "user": {
@@ -280,30 +375,148 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
         }
 
     # 1d. Admin API
-    if path == "/api/admin/aws-credentials" and method == "GET":
+    if path == "/api/admin/aws-credentials" and method in ("GET", "POST"):
         return _response(200, {
+            "status": "success",
             "configured": True,
             "masked_key_id": "IAM-ROLE-ACTIVE",
             "region": "us-east-1",
+            "message": "AWS IAM Role is active. Manual keys are not required.",
         })
 
     if path == "/api/admin/users" and method == "GET":
+        user_list = [
+            {
+                "id": u["id"],
+                "email": u["email"],
+                "role": u["role"],
+                "name": u["name"],
+                "is_active": u.get("is_active", True),
+                "created_at": u.get("created_at", "2026-10-25 00:00:00"),
+            }
+            for u in users.values()
+        ]
         return _response(200, {
-            "status": "ok",
-            "users": [
-                {"id": "usr_1", "email": "officer@agency.go.th", "role": "user", "name": "Bank Officer", "is_active": True},
-                {"id": "usr_2", "email": "admin@agency.go.th", "role": "admin", "name": "System Administrator", "is_active": True},
-            ],
-            "total": 2,
+            "status": "success",
+            "users": user_list,
+            "total": len(user_list),
         })
 
+    if path == "/api/admin/users" and method == "POST":
+        body = _extract_body(event)
+        new_email = (body.get("email") or "").strip().lower()
+        new_pwd = body.get("password") or ""
+        display_name = (body.get("display_name") or new_email.split("@")[0]).strip()
+        role = "user"  # Strictly user/BankOfficer
+
+        if not new_email or "@" not in new_email:
+            return _response(400, {"status": "error", "message": "Valid email address is required"})
+        if len(new_pwd) < 10:
+            return _response(400, {"status": "error", "message": "Password must be at least 10 characters long"})
+        if new_email in users:
+            return _response(409, {"status": "error", "message": f"User with email '{new_email}' already exists"})
+
+        import uuid, datetime
+        user_id = f"usr_{uuid.uuid4().hex[:12]}"
+        created_user = {
+            "id": user_id,
+            "email": new_email,
+            "password_hash": _hash_password_pbkdf2(new_pwd),
+            "role": role,
+            "name": display_name,
+            "department": "Bank AML Investigation",
+            "is_active": True,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        users[new_email] = created_user
+        _save_users_to_storage()
+
+        # Record audit log
+        logs = _load_audit_logs_from_storage()
+        logs.insert(0, {
+            "id": f"log_{uuid.uuid4().hex[:8]}",
+            "action": "CREATE_USER",
+            "admin_email": "admin@agency.go.th",
+            "target_email": new_email,
+            "created_at": created_user["created_at"],
+            "details": f"Created new Bank Officer user ({display_name})",
+        })
+        _save_audit_logs_to_storage()
+
+        return _response(201, {
+            "status": "success",
+            "user": {
+                "id": user_id,
+                "email": new_email,
+                "role": role,
+                "name": display_name,
+                "is_active": True,
+                "created_at": created_user["created_at"],
+            },
+        })
+
+    if "/api/admin/users/" in path and path.endswith("/status") and method == "PATCH":
+        body = _extract_body(event)
+        target_id = path.replace("/api/admin/users/", "").replace("/status", "").strip()
+        target_user = next((u for u in users.values() if u["id"] == target_id), None)
+        if not target_user:
+            return _response(404, {"status": "error", "message": f"User '{target_id}' not found"})
+
+        if target_user["email"] == "admin@agency.go.th":
+            return _response(400, {"status": "error", "message": "Cannot deactivate root administrator account"})
+
+        target_user["is_active"] = bool(body.get("is_active", True))
+        _save_users_to_storage()
+
+        import uuid, datetime
+        logs = _load_audit_logs_from_storage()
+        action_name = "ACTIVATE_USER" if target_user["is_active"] else "DEACTIVATE_USER"
+        logs.insert(0, {
+            "id": f"log_{uuid.uuid4().hex[:8]}",
+            "action": action_name,
+            "admin_email": "admin@agency.go.th",
+            "target_email": target_user["email"],
+            "created_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "details": f"Status updated to: {target_user['is_active']}",
+        })
+        _save_audit_logs_to_storage()
+
+        return _response(200, {"status": "success", "user": target_user})
+
+    if "/api/admin/users/" in path and path.endswith("/reset-password") and method == "POST":
+        body = _extract_body(event)
+        target_id = path.replace("/api/admin/users/", "").replace("/reset-password", "").strip()
+        new_pwd = body.get("new_password") or ""
+        if len(new_pwd) < 10:
+            return _response(400, {"status": "error", "message": "New password must be at least 10 characters long"})
+
+        target_user = next((u for u in users.values() if u["id"] == target_id), None)
+        if not target_user:
+            return _response(404, {"status": "error", "message": f"User '{target_id}' not found"})
+
+        target_user["password_hash"] = _hash_password_pbkdf2(new_pwd)
+        _save_users_to_storage()
+
+        import uuid, datetime
+        logs = _load_audit_logs_from_storage()
+        logs.insert(0, {
+            "id": f"log_{uuid.uuid4().hex[:8]}",
+            "action": "RESET_PASSWORD",
+            "admin_email": "admin@agency.go.th",
+            "target_email": target_user["email"],
+            "created_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "details": "Password reset by administrator",
+        })
+        _save_audit_logs_to_storage()
+
+        return _response(200, {"status": "success", "message": "Password reset successfully"})
+
     if path == "/api/admin/audit-logs" and method == "GET":
+        logs = _load_audit_logs_from_storage()
         return _response(200, {
-            "status": "ok",
-            "logs": [
-                {"action": "SERVERLESS_DEPLOY", "admin_email": "aws-lambda@system", "target_email": "system", "created_at": "2026-10-25 04:30:00", "details": "Active IAM Role"},
-            ],
-            "total": 1,
+            "status": "success",
+            "logs": logs,
+            "total": len(logs),
         })
 
     # 2. Health Check
