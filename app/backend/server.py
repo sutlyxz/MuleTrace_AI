@@ -856,6 +856,103 @@ class MuleTraceRequestHandler(SimpleHTTPRequestHandler):
             self._send_json_response(res_data, code)
             return
 
+        # 3b. Officer-initiated Bedrock Converse tool-use agent (never automatic)
+        if clean_path in ("/api/ai/investigate", "/ai/investigate"):
+            user = self._require_user()
+            if user is None:
+                return
+
+            case_id = str(payload.get("case_id") or "").strip()
+            if not case_id or len(case_id) > 100:
+                self._send_json_response({"error": "Valid case_id required"}, 400)
+                return
+
+            investigation = payload.get("investigation") if isinstance(payload.get("investigation"), dict) else {}
+            try:
+                from app.backend.aws.dynamodb_service import get_investigation_alert
+                stored = get_investigation_alert(case_id) or {}
+            except Exception:
+                stored = {}
+            stored_data = stored.get("data") if isinstance(stored.get("data"), dict) else {}
+
+            if case_id.startswith("SIM-"):
+                simulation_context = {
+                    key: stored_data[key]
+                    for key in (
+                        "caseId", "case_id", "source_account", "target_account",
+                        "transaction_id", "amount", "score", "priority", "risk", "scenario",
+                    )
+                    if stored_data.get(key) is not None
+                }
+                if not simulation_context:
+                    try:
+                        from app.backend.simulation.transport import get_simulated_cases
+                        sim_match = next((sc for sc in get_simulated_cases() if sc.get("caseId") == case_id), None)
+                        if sim_match:
+                            simulation_context = {
+                                "caseId": sim_match.get("caseId"),
+                                "source_account": sim_match.get("source"),
+                                "target_account": sim_match.get("target"),
+                                "amount": sim_match.get("amount"),
+                                "score": sim_match.get("priorityScore"),
+                                "risk": sim_match.get("risk"),
+                            }
+                    except Exception:
+                        pass
+                objective = (
+                    f"Review synthetic test case {case_id}. "
+                    "Use available tools to check related account or transaction records when possible. "
+                    "Simulation metadata below is sourced from DynamoDB, not the canonical CSV dataset. "
+                    "Do not treat CSV tool results as proof of simulation events. "
+                    "If a tool cannot verify a simulation record, explicitly say it is unverified. "
+                    "Do not invent evidence or infer wrongdoing. Simulation metadata: "
+                    + json.dumps(simulation_context, ensure_ascii=False, default=str)
+                )
+            else:
+                context_data = {
+                    "case_id": case_id,
+                    "frontend_investigation": investigation,
+                    "simulation_case": None,
+                }
+                objective = (
+                    "Investigate the synthetic AML case " + case_id + ". "
+                    "IMPORTANT: If the case_id starts with SIM-, you MUST first call "
+                    "get_simulation_case using the case_id to retrieve the actual "
+                    "simulation record from DynamoDB. "
+                    "A case ID is NOT an account ID. Never pass a SIM- case ID "
+                    "to account-based tools. "
+                    "Use only real source and target account identifiers found "
+                    "in the retrieved simulation record for account-based tools. "
+                    "Canonical CSV tools may not contain simulated transactions. "
+                    "Do not interpret missing CSV records as missing DynamoDB evidence. "
+                    "Clearly distinguish DynamoDB simulation evidence from CSV evidence. "
+                    "For non-SIM cases, investigate using the normal engine tools. "
+                    "Do not fabricate tool findings or claim guilt. Context: "
+                    + json.dumps(context_data, ensure_ascii=False, default=str)[:12000]
+                )
+
+            try:
+                from app.backend.aws.bedrock_service import run_investigation_agent
+                result = run_investigation_agent(
+                    objective=objective,
+                    max_turns=6,
+                    model_id="amazon.nova-micro-v1:0",
+                )
+                result_status = result.get("status", "error")
+                code = 502 if result_status in ("content_filtered", "error") else 200
+                self._send_json_response({
+                    "status": result_status,
+                    "case_id": case_id,
+                    "summary": result.get("final_answer", ""),
+                    "executed_tools": result.get("executed_tools", []),
+                    "turns_taken": result.get("turns_taken", 0),
+                    "model_id": result.get("model_id"),
+                }, code)
+                return
+            except Exception as exc:
+                self._send_json_response({"status": "error", "message": str(exc)}, 502)
+                return
+
         # 4. Investigation API: AI Summary Narrative (Requires 'user' role; admin is denied)
         if clean_path in ("/api/ai/summary", "/ai/summary"):
             user = self._require_user()

@@ -11,7 +11,7 @@ import json
 from typing import Any
 
 from .. import engine
-from .bedrock_service import generate_narrative_report
+from .bedrock_service import generate_narrative_report, run_investigation_agent
 from .dynamodb_service import get_investigation_alert, save_investigation_alert
 from .s3_service import get_report_from_s3, upload_report_to_s3
 
@@ -313,14 +313,32 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
 
     # 3. Cases List
     if path.endswith("/cases") and method == "GET":
+        # Baseline cases remain explicitly CSV-sourced; cloud cases use a DynamoDB
+        # index item, since this team's least-privilege role has GetItem but no Scan.
         case_accounts = engine.load_case_accounts()
-        if case_accounts.empty:
-            return _response(200, {"cases": [], "receivedCount": 0})
-        case_ids = case_accounts["case_id"].unique().tolist()
         cases = []
-        for cid in case_ids:
-            accounts = case_accounts[case_accounts["case_id"] == cid]["account_id"].tolist()
-            cases.append({"caseId": cid, "accounts": accounts})
+        tx = engine.load_transactions()
+        if not case_accounts.empty:
+            for cid in case_accounts["case_id"].unique().tolist():
+                accounts = case_accounts[case_accounts["case_id"] == cid]["account_id"].tolist()
+                relevant = tx[tx["source_account"].isin(accounts) & tx["target_account"].isin(accounts)]
+                if relevant.empty:
+                    relevant = tx[(tx["source_account"].isin(accounts)) | (tx["target_account"].isin(accounts))]
+                case = {"caseId": cid, "accounts": accounts, "source_type": "csv_baseline",
+                        "status": "new", "description": "Baseline case from canonical CSV dataset"}
+                if not relevant.empty:
+                    r = relevant.sort_values("timestamp").iloc[0]
+                    case.update({"source": str(r["source_account"]), "target": str(r["target_account"]),
+                                 "amount": float(r["amount"]), "time": r["timestamp"].isoformat(),
+                                 "transactionId": str(r["transaction_id"])})
+                cases.append(case)
+        index = get_investigation_alert("SIMULATION_CASE_INDEX") or {}
+        for entry in (index.get("data") or {}).get("cases", []):
+            if not isinstance(entry, dict) or not entry.get("caseId"):
+                continue
+            saved = get_investigation_alert(entry["caseId"]) or {}
+            record = saved.get("data") if isinstance(saved.get("data"), dict) else entry
+            cases.append({**entry, **record, "caseId": entry["caseId"], "source_type": "dynamodb_simulation"})
         return _response(200, {"cases": cases, "receivedCount": len(cases)})
 
     # 4. Money Flow Tracing
@@ -356,7 +374,24 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
             seed_val = body.get("seed")
             sim_engine = SimulationEngine()
             sim_res = sim_engine.run_simulation(seed=int(seed_val) if seed_val is not None else None)
-            return _response(200, {"status": "success", "data": sim_res})
+            # Persist a stable, read-only Case Queue index using GetItem/PutItem.
+            # The EventBridge Lambda independently persists every received transaction.
+            from ..simulation.transport import get_simulated_cases
+            if sim_res.get("events_submitted", 0) > 0:
+                generated = [c for c in get_simulated_cases() if c.get("run_id") == sim_res.get("run_id")]
+                old_index = get_investigation_alert("SIMULATION_CASE_INDEX") or {}
+                previous = (old_index.get("data") or {}).get("cases", [])
+                merged = {c["caseId"]: c for c in previous if isinstance(c, dict) and c.get("caseId")}
+                errors = []
+                for c in generated:
+                    merged[c["caseId"]] = c
+                    result = save_investigation_alert(c["caseId"], {**c, "score": c["priorityScore"], "priority": c["risk"]})
+                    if result.get("status") != "success": errors.append(result)
+                index_result = save_investigation_alert("SIMULATION_CASE_INDEX", {"cases": list(merged.values())[-60:]})
+                if index_result.get("status") != "success": errors.append(index_result)
+                sim_res["cloud_cases_saved"] = len(generated) - len(errors) if not errors else 0
+                sim_res["persistence_errors"] = errors
+            return _response(200, {"status": "success" if not sim_res.get("persistence_errors") else "partial_failure", "data": sim_res})
         except Exception as exc:
             return _response(500, {"status": "error", "message": str(exc)})
 
@@ -367,6 +402,76 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
         if not status_data:
             return _response(404, {"status": "error", "message": f"Run ID '{run_id}' not found"})
         return _response(200, {"status": "success", "data": status_data})
+
+    # Officer-initiated Bedrock Converse tool-use agent (never automatic).
+    if path.endswith("/api/ai/investigate") and method == "POST":
+        body = _extract_body(event)
+        case_id = str(body.get("case_id") or "").strip()
+        if not case_id or len(case_id) > 100:
+            return _response(400, {"error": "Valid case_id required"})
+        investigation = body.get("investigation") if isinstance(body.get("investigation"), dict) else {}
+        stored = get_investigation_alert(case_id) or {}
+        stored_data = stored.get("data") if isinstance(stored.get("data"), dict) else {}
+        # Simulation records come from DynamoDB; the existing tools query canonical CSV data.
+        if case_id.startswith("SIM-"):
+            simulation_context = {
+                key: stored_data[key]
+                for key in (
+                    "caseId", "case_id", "source_account", "target_account",
+                    "transaction_id", "amount", "score", "priority", "risk", "scenario",
+                )
+                if stored_data.get(key) is not None
+            }
+            objective = (
+                f"Review synthetic test case {case_id}. "
+                "Use available tools to check related account or transaction records when possible. "
+                "Simulation metadata below is sourced from DynamoDB, not the canonical CSV dataset. "
+                "Do not treat CSV tool results as proof of simulation events. "
+                "If a tool cannot verify a simulation record, explicitly say it is unverified. "
+                "Do not invent evidence or infer wrongdoing. Simulation metadata: "
+                + json.dumps(simulation_context, ensure_ascii=False, default=str)
+            )
+        else:
+            context_data = {
+                "case_id": case_id,
+                "frontend_investigation": investigation,
+                "simulation_case": None,
+            }
+            
+            objective = (
+                "Investigate the synthetic AML case " + case_id + ". "
+                "IMPORTANT: If the case_id starts with SIM-, you MUST first call "
+                "get_simulation_case using the case_id to retrieve the actual "
+                "simulation record from DynamoDB. "
+                "A case ID is NOT an account ID. Never pass a SIM- case ID "
+                "to account-based tools. "
+                "Use only real source and target account identifiers found "
+                "in the retrieved simulation record for account-based tools. "
+                "Canonical CSV tools may not contain simulated transactions. "
+                "Do not interpret missing CSV records as missing DynamoDB evidence. "
+                "Clearly distinguish DynamoDB simulation evidence from CSV evidence. "
+                "For non-SIM cases, investigate using the normal engine tools. "
+                "Do not fabricate tool findings or claim guilt. Context: "
+                + json.dumps(context_data, ensure_ascii=False, default=str)[:12000]
+            )
+
+        try:
+            result = run_investigation_agent(
+                objective=objective,
+                max_turns=6,
+                model_id="amazon.nova-micro-v1:0",
+            )
+            result_status = result.get("status", "error")
+            return _response(502 if result_status in ("content_filtered", "error") else 200, {
+                "status": result_status,
+                "case_id": case_id,
+                "summary": result.get("final_answer", ""),
+                "executed_tools": result.get("executed_tools", []),
+                "turns_taken": result.get("turns_taken", 0),
+                "model_id": result.get("model_id"),
+            })
+        except Exception as exc:
+            return _response(502, {"status": "error", "message": str(exc)})
 
     # 6. AI Summary & Case Triage (Bedrock + S3 + DynamoDB)
     if path.endswith("/api/ai/summary") or path.endswith("/ai/summary"):
@@ -387,6 +492,9 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
                 }
         else:
             investigation_data = dict(investigation_input)
+        # Frontend uses priority_score/risk_level; normalize before persistence.
+        investigation_data["score"] = investigation_data.get("score", investigation_data.get("priority_score", 0))
+        investigation_data["priority"] = investigation_data.get("priority", investigation_data.get("risk_level", "Medium"))
 
         try:
             ai_report = generate_narrative_report(investigation_data, language=lang)
@@ -471,14 +579,15 @@ def handle_eventbridge_transaction(event: dict[str, Any], context: Any = None) -
     is_suspicious = bool(detail.get("is_suspicious", False))
     scenario = str(detail.get("scenario") or "normal")
 
+    # Persist all 20 events in DynamoDB; normal events are NOT alerts.
+    tx_save = save_investigation_alert(f"TX-{tx_id}", {
+        **detail, "record_type": "simulation_transaction", "score": 0,
+        "priority": "Normal", "simulation_run_id": run_id,
+    })
     if not is_suspicious:
-        return {
-            "status": "processed_normal",
-            "dedup_key": dedup_key,
-            "run_id": run_id,
-            "transaction_id": tx_id,
-            "alert_created": False,
-        }
+        return {"status": "processed_normal", "dedup_key": dedup_key,
+                "run_id": run_id, "transaction_id": tx_id,
+                "alert_created": False, "dynamodb": tx_save}
 
     case_id = f"SIM-{tx_id}"
     alert_payload = {
@@ -493,7 +602,6 @@ def handle_eventbridge_transaction(event: dict[str, Any], context: Any = None) -
         "priority": "High",
         "dedup_key": dedup_key,
     }
-    s3_res = upload_report_to_s3(case_id, alert_payload)
     dynamo_res = save_investigation_alert(case_id, alert_payload)
 
     return {
@@ -503,7 +611,6 @@ def handle_eventbridge_transaction(event: dict[str, Any], context: Any = None) -
         "run_id": run_id,
         "transaction_id": tx_id,
         "alert_created": True,
-        "s3": s3_res,
         "dynamodb": dynamo_res,
     }
 

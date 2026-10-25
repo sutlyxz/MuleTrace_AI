@@ -36,8 +36,30 @@ const state = {
   hops: 3,
   replay: byTime.length,
   selectedTx: D.cases[0].transactionId,
-  aiText: ""
+  aiText: "",
+  aiResult: null,
+  aiCaseId: null,
+  aiResultsByCase: {},
+  isInvestigating: false
 };
+
+function syncCaseAiState() {
+  const cached = state.aiResultsByCase[state.caseId] || null;
+  state.aiResult = cached;
+  state.aiCaseId = cached ? state.caseId : null;
+  state.aiText = cached ? cleanAgentSummary(cached.summary) : "";
+
+  const progress = $("#agentProgress");
+  if (progress) {
+    if (state.isInvestigating) {
+      progress.textContent = "AI is investigating this case... (Calling Bedrock Converse Tool Use)";
+    } else if (cached && cached.status === "completed") {
+      progress.textContent = `ตรวจสอบเสร็จแล้ว · เรียกเครื่องมือ ${cached.executed_tools?.length || 0} ครั้ง`;
+    } else {
+      progress.textContent = "ยังไม่ได้เริ่มตรวจสอบด้วย AI · กด 'Run AI Investigation' เพื่อเริ่มต้น";
+    }
+  }
+}
 
 const currentCase = () =>
   D.cases.find(c => c.caseId === state.caseId) || D.cases[0];
@@ -87,7 +109,7 @@ function showPage(page) {
     cases: "Case Queue",
     trail: "Money Trail",
     investigation: "Investigation",
-    report: "Evidence & Report"
+    report: "Outcome & Report"
   };
 
   $("#pageTitle").textContent = names[page];
@@ -384,7 +406,7 @@ function caseButton(c) {
   b.addEventListener("click", () => {
     state.caseId = c.caseId;
     state.selectedTx = c.transactionId;
-    state.aiText = "";
+    syncCaseAiState();
 
     $("#caseSelect").value = c.caseId;
 
@@ -719,130 +741,159 @@ function renderTrail(a, c) {
 // ==========================================
 
 function renderInvestigation(a, c) {
-  $("#investigationHeading").textContent =
-    `${c.caseId} · ${c.target}`;
+  // Case Header
+  const heading = $("#investigationHeading");
+  if (heading) heading.textContent = `${c.caseId} · ${c.target}`;
 
   const priorityEl = $("#priorityLabel");
-  priorityEl.textContent = `${a.risk} · ${a.score}/100`;
-  const riskClass = (a.risk || "medium").toLowerCase();
-  priorityEl.setAttribute("data-risk", riskClass);
-
-  const summary = $("#caseSummary");
-
-  const wrap = el(
-    "div",
-    undefined,
-    `summary-score risk-${riskClass}`
-  );
-  wrap.setAttribute("data-risk", riskClass);
-
-  const circle = el("div", String(a.score), "score-circle");
-  circle.setAttribute("data-risk", riskClass);
-  wrap.append(circle);
-
-  const txt = el("div", undefined, "summary-score-text");
-
-  txt.append(
-    el("strong", `${a.risk} investigation priority`),
-    el(
-      "p",
-      `${a.signals.length} evidence signals · ` +
-      `${a.network.nodes.length} linked accounts`,
-      "helper"
-    )
-  );
-
-  wrap.append(txt);
-
-  const grid = el("div", undefined, "case-metrics-grid");
-  grid.append(
-    detailRow("Alert source", c.source),
-    detailRow("Target", c.target),
-    detailRow("Alert amount", fmt(c.amount)),
-    detailRow("Alert date", dateLabel(c.time))
-  );
-
-  const signalsStrip = el("div", undefined, "investigation-signals-strip");
-  if (a.signals && a.signals.length) {
-    a.signals.forEach(s => {
-      const pill = el("span", s.title, "signal-tag");
-      signalsStrip.append(pill);
-    });
+  const riskClass = (c.risk || a.risk || "medium").toLowerCase();
+  const alertScoreText = `${c.risk || a.risk} ${c.priorityScore ?? a.score}/100`;
+  if (priorityEl) {
+    priorityEl.textContent = alertScoreText;
+    priorityEl.setAttribute("data-risk", riskClass);
   }
 
-  put(
-    summary,
-    wrap,
-    grid,
-    signalsStrip
-  );
+  // Active AI Result for this specific case
+  const caseAiResult = (state.aiCaseId === c.caseId) ? state.aiResult : (state.aiResultsByCase[c.caseId] || null);
 
-  // Tool Activity ในโหมดกฎจำลอง
-  const stepNames = [
-    [
-      "get_account_profile",
-      `ตรวจสถานะบัญชี ${c.target}`
-    ],
-    [
-      "get_transaction_history",
-      "ดึงข้อมูลรับ-โอนที่เกี่ยวข้อง"
-    ],
-    [
-      "expand_network",
-      `สำรวจเครือข่าย 3 ทอด (${a.network.nodes.length} บัญชี)`
-    ],
-    [
-      "search_previous_cases",
-      `เชื่อมโยง ${a.overlaps.length} เคสก่อนหน้า`
-    ],
-    [
-      "score_investigation",
-      `คำนวณคะแนน Priority ${a.score}/100`
-    ]
-  ];
+  const aiAssessmentBadge = $("#invAiAssessmentBadge");
+  if (aiAssessmentBadge) {
+    if (caseAiResult && caseAiResult.status === "completed") {
+      aiAssessmentBadge.textContent = `ASSESSED · ${caseAiResult.executed_tools?.length || 0} TOOLS`;
+      aiAssessmentBadge.className = "soft-pill badge-assessed";
+    } else if (state.isInvestigating && state.caseId === c.caseId) {
+      aiAssessmentBadge.textContent = "INVESTIGATING...";
+      aiAssessmentBadge.className = "soft-pill badge-investigating";
+    } else {
+      aiAssessmentBadge.textContent = "AWAITING AI";
+      aiAssessmentBadge.className = "soft-pill";
+    }
+  }
 
-  put(
-    $("#toolSteps"),
-    ...stepNames.map(([name, desc], idx) => {
-      const li = el("li");
-      li.setAttribute("data-step", String(idx + 1).padStart(2, "0"));
+  // Metadata strip
+  const metaSource = $("#invMetaSource");
+  if (metaSource) metaSource.textContent = c.source && c.source !== "—" ? c.source : "—";
+  const metaTarget = $("#invMetaTarget");
+  if (metaTarget) metaTarget.textContent = c.target && c.target !== "—" ? c.target : "—";
+  const metaAmount = $("#invMetaAmount");
+  if (metaAmount) metaAmount.textContent = fmt(c.amount);
+  const metaTime = $("#invMetaTime");
+  if (metaTime) metaTime.textContent = dateLabel(c.time);
+  const metaStatus = $("#invMetaStatus");
+  if (metaStatus) {
+    const st = String(c.status || "new").toLowerCase();
+    metaStatus.innerHTML = `<span class="status-tag ${st}">${st.toUpperCase()}</span>`;
+  }
 
-      li.append(
-        el("strong", name),
-        el("small", desc)
-      );
+  // Outcome nav button enablement
+  const btnGoOutcome = $("#btnGoOutcome");
+  if (btnGoOutcome) {
+    btnGoOutcome.disabled = !caseAiResult || caseAiResult.status !== "completed";
+  }
 
-      return li;
-    })
-  );
+  // Preliminary findings
+  const findingsEmpty = $("#invFindingsEmpty");
+  const findingsContent = $("#invFindingsContent");
+  const findingBadge = $("#agentFindingBadge");
 
-  put(
-    $("#recommendedAccounts"),
-    ...a.next.map(x => {
-      const chip = el(
-        "button",
-        `${x.id} · ${x.score} points`,
-        "chip clickable rec-account-card"
-      );
-      chip.type = "button";
-      chip.style.cursor = "pointer";
-      chip.setAttribute("data-score", x.score);
-      if (x.score >= 50) {
-        chip.classList.add("rec-high-risk");
+  if (caseAiResult && caseAiResult.status === "completed") {
+    if (findingsEmpty) findingsEmpty.hidden = true;
+    if (findingsContent) {
+      findingsContent.hidden = false;
+      const cleanText = cleanAgentSummary(caseAiResult.summary);
+      const isSim = String(c.caseId || "").startsWith("SIM-");
+
+      const blocks = [];
+      const summaryDiv = el("div", undefined, "ai-officer-summary-prose");
+      summaryDiv.textContent = cleanText || "Investigation synthesis completed.";
+      blocks.push(summaryDiv);
+
+      if (isSim) {
+        const simNotice = el("div", undefined, "inv-sim-notice-callout");
+        simNotice.innerHTML = `
+          <strong>🔍 การตรวจสอบข้อมูลจำลอง (Synthetic Case Notice)</strong>
+          <p>ข้อมูลเคสนี้มาจากฐานข้อมูลจำลอง DynamoDB ซึ่งเครื่องมือของ Bedrock Agent ได้เข้าตรวจสอบข้อมูลและประเมินเส้นทางเรียบร้อยแล้ว เนื่องจากเป็นเคสจำลอง ธุรกรรมนี้จึงยังไม่ปรากฏในชุดข้อมูลประวัติศาสตร์ CSV หลัก เจ้าหน้าที่ต้องยืนยันข้อมูลกับระบบงานจริงก่อนดำเนินการอายัดบัญชี</p>
+        `;
+        blocks.push(simNotice);
       }
-      chip.addEventListener("click", () => {
-        const linkedTx = D.transactions.find(
-          t => t.from === x.id || t.to === x.id
-        );
-        if (linkedTx) {
-          state.selectedTx = linkedTx.id;
-        }
-        state.replay = byTime.length;
-        showPage("trail");
+
+      put(findingsContent, ...blocks);
+    }
+    if (findingBadge) {
+      findingBadge.textContent = "AGENT SYNTHESIS";
+      findingBadge.className = "soft-pill badge-completed";
+    }
+  } else {
+    if (findingsEmpty) findingsEmpty.hidden = false;
+    if (findingsContent) {
+      findingsContent.hidden = true;
+      findingsContent.replaceChildren();
+    }
+    if (findingBadge) {
+      findingBadge.textContent = state.isInvestigating ? "INVESTIGATING..." : "AWAITING AI";
+      findingBadge.className = "soft-pill";
+    }
+  }
+
+  // Baseline rule-based summary
+  const summary = $("#caseSummary");
+  if (summary) {
+    const wrap = el("div", undefined, `summary-score risk-${riskClass}`);
+    wrap.setAttribute("data-risk", riskClass);
+    const circle = el("div", String(c.priorityScore ?? a.score), "score-circle");
+    circle.setAttribute("data-risk", riskClass);
+    wrap.append(circle);
+
+    const txt = el("div", undefined, "summary-score-text");
+    txt.append(
+      el("strong", `${c.risk || a.risk} alert priority`),
+      el("p", `${a.signals.length} evidence signals · ${a.network.nodes.length} linked accounts`, "helper")
+    );
+    wrap.append(txt);
+
+    const grid = el("div", undefined, "case-metrics-grid");
+    grid.append(
+      detailRow("Alert source", c.source),
+      detailRow("Target", c.target),
+      detailRow("Alert amount", fmt(c.amount)),
+      detailRow("Alert date", dateLabel(c.time))
+    );
+
+    const signalsStrip = el("div", undefined, "investigation-signals-strip");
+    if (a.signals && a.signals.length) {
+      a.signals.forEach(s => {
+        const pill = el("span", s.title, "signal-tag");
+        signalsStrip.append(pill);
       });
-      return chip;
-    })
-  );
+    }
+
+    put(summary, wrap, grid, signalsStrip);
+  }
+
+  // Render real tool execution list
+  renderAgentTrace();
+
+  // Recommended Accounts
+  const recAccounts = $("#recommendedAccounts");
+  if (recAccounts) {
+    put(
+      recAccounts,
+      ...a.next.map(x => {
+        const chip = el("button", `${x.id} · ${x.score} points`, "chip clickable rec-account-card");
+        chip.type = "button";
+        chip.style.cursor = "pointer";
+        chip.setAttribute("data-score", x.score);
+        if (x.score >= 50) chip.classList.add("rec-high-risk");
+        chip.addEventListener("click", () => {
+          const linkedTx = D.transactions.find(t => t.from === x.id || t.to === x.id);
+          if (linkedTx) state.selectedTx = linkedTx.id;
+          state.replay = byTime.length;
+          showPage("trail");
+        });
+        return chip;
+      })
+    );
+  }
 }
 
 // ==========================================
@@ -986,132 +1037,462 @@ function download(a, c) {
 }
 
 // ==========================================
-// OPTIONAL AWS API CONNECTION
+// AI INVESTIGATION TOOLS & OUTCOME DASHBOARD
 // ==========================================
 
-async function callAi(a, c) {
-  const box = $("#aiResult");
-  const button = $("#runAi");
+const TOOL_DESCRIPTIONS_EN = {
+  get_simulation_case: "Review Alert Details",
+  get_account_profile: "Review Account Profile",
+  get_transaction_history: "Examine Transaction History",
+  detect_risk: "Assess Risk Indicators",
+  trace_money: "Trace Money Transfers",
+  score_investigation: "Assess Investigation Priority",
+  get_evidence: "Review Supporting Evidence",
+  find_cross_case_links: "Find Related Cases"
+};
 
-  let url =
-    window.MULETRACE_CONFIG?.apiUrl?.trim() || "";
+const TOOL_DESCRIPTIONS_TH = {
+  get_simulation_case: "ตรวจสอบรายละเอียดการแจ้งเตือน",
+  get_account_profile: "ตรวจสอบข้อมูลบัญชีผู้ต้องสงสัย",
+  get_transaction_history: "ตรวจสอบประวัติการทำธุรกรรม",
+  detect_risk: "ประเมินสัญญาณความเสี่ยงทางบัญชี",
+  trace_money: "ติดตามเส้นทางการโอนเงินในเครือข่าย",
+  score_investigation: "ประเมินลำดับความสำคัญการตรวจสอบ",
+  get_evidence: "รวบรวมและตรวจสอบหลักฐานประกอบ",
+  find_cross_case_links: "ตรวจสอบความเชื่อมโยงกับเคสอื่น"
+};
 
-  if (typeof window !== "undefined" && window.location?.origin) {
-    if (!url) {
-      url = `${window.location.origin}/api/ai/summary`;
-    } else if (url.startsWith("/")) {
-      url = `${window.location.origin}${url}`;
+const TOOL_DESCRIPTIONS = TOOL_DESCRIPTIONS_TH;
+
+function extractToolTarget(input) {
+  if (!input || typeof input !== "object") return "";
+  if (input.account_id) return `Account ${input.account_id}`;
+  if (input.case_id) return `Case ${input.case_id}`;
+  if (input.source_account && input.target_account) return `${input.source_account} → ${input.target_account}`;
+  if (input.source_account) return `From ${input.source_account}`;
+  if (input.target_account) return `To ${input.target_account}`;
+  if (input.account) return `Account ${input.account}`;
+  return "";
+}
+
+function getToolDescription(toolName) {
+  const isEn = window.MuleI18N?.getLanguage?.() === "en";
+  const dict = isEn ? TOOL_DESCRIPTIONS_EN : TOOL_DESCRIPTIONS_TH;
+  if (dict[toolName]) return dict[toolName];
+  return String(toolName || "").replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function cleanAgentSummary(text) {
+  return String(text || "")
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    .replace(/<response>|<\/response>/gi, "")
+    .replace(/<\/?reasoning>/gi, "")
+    .replace(/<\/?thought>/gi, "")
+    .trim();
+}
+
+function renderAgentTrace() {
+  const list = $("#toolSteps");
+  const detail = $("#agentTrace");
+  const badge = $("#agentActivityBadge");
+  const toolsEmpty = $("#invToolsEmpty");
+
+  const c = currentCase();
+  const data = (state.aiCaseId === c.caseId) ? state.aiResult : (state.aiResultsByCase[c.caseId] || null);
+  const calls = Array.isArray(data?.executed_tools) ? data.executed_tools : [];
+
+  if (badge) {
+    if (state.isInvestigating && state.caseId === c.caseId) {
+      badge.textContent = "INVESTIGATING...";
+      badge.className = "soft-pill badge-investigating";
+    } else if (data?.status === "completed") {
+      badge.textContent = "BEDROCK AGENT · COMPLETED";
+      badge.className = "soft-pill badge-completed";
+    } else {
+      badge.textContent = "AWAITING AI";
+      badge.className = "soft-pill";
     }
   }
 
-  if (!url) {
-    box.textContent =
-      "ยังไม่ได้กำหนด API endpoint ใน config.js · " +
-      "ใช้ Rule-based อยู่";
+  if (toolsEmpty) toolsEmpty.hidden = calls.length > 0;
+
+  if (list) {
+    if (!calls.length) {
+      list.replaceChildren();
+    } else {
+      const items = calls.map((item, i) => {
+        const li = el("li", undefined, "inv-tool-step-item");
+        li.setAttribute("data-step", String(i + 1).padStart(2, "0"));
+
+        const head = el("div", undefined, "tool-step-header");
+        const titleStrong = el("strong", getToolDescription(item.tool));
+        const statusSpan = el(
+          "span",
+          item.status === "success" ? "Success" : (item.status || "Completed"),
+          `tool-status-badge ${item.status === "success" ? "success" : "warning"}`
+        );
+        head.append(titleStrong, statusSpan);
+
+        const metaDiv = el("div", undefined, "tool-step-meta");
+        const turnText = el("span", `Turn ${item.turn || (i + 1)} · Step ${i + 1}`, "tool-turn-tag");
+        metaDiv.append(turnText);
+
+        const targetEntity = extractToolTarget(item.input);
+        if (targetEntity) {
+          const targetTag = el("span", `Target: ${targetEntity}`, "tool-target-pill");
+          metaDiv.append(targetTag);
+        }
+
+        const techDetails = el("details", undefined, "tool-tech-collapsible");
+        const techSummary = el("summary", undefined, "tool-tech-summary");
+        techSummary.textContent = `Technical: ${item.tool}`;
+        const techPre = el("pre", JSON.stringify({ tool: item.tool, input: item.input, status: item.status }, null, 2));
+        techDetails.append(techSummary, techPre);
+
+        li.append(head, metaDiv, techDetails);
+        return li;
+      });
+      put(list, ...items);
+    }
+  }
+
+  // Telemetry for judges
+  const traceModel = $("#traceModelId");
+  if (traceModel) traceModel.textContent = data?.model_id || "amazon.nova-micro-v1:0";
+  const traceTurns = $("#traceTurnsCount");
+  if (traceTurns) traceTurns.textContent = data?.turns_taken ? String(data.turns_taken) : (calls.length ? String(calls.length) : "—");
+  const traceTools = $("#traceToolsCount");
+  if (traceTools) traceTools.textContent = calls.length ? String(calls.length) : "—";
+
+  if (detail) {
+    detail.hidden = !calls.length;
+    if (calls.length) {
+      const traceRows = calls.map(item => {
+        const row = el("div", undefined, "mt-trace-row");
+        const strong = el("strong", item.tool);
+        const code = el("code", JSON.stringify(item.input || {}));
+        const stat = el("span", item.status || "ok", `trace-stat-tag ${item.status === "success" ? "success" : ""}`);
+        row.append(strong, code, stat);
+        return row;
+      });
+      put(detail, ...traceRows);
+    }
+  }
+}
+
+function renderOutcomeDashboard(a, c) {
+  const caseAiResult = (state.aiCaseId === c.caseId) ? state.aiResult : (state.aiResultsByCase[c.caseId] || null);
+
+  // --- CARD 1: Money Flow Visualization ---
+  const flowContainer = $("#outcomeFlowPreview");
+  const flowMetrics = $("#outcomeFlowMetrics");
+  if (flowContainer) {
+    flowContainer.replaceChildren();
+    if (c.source && c.target && c.source !== "—" && c.target !== "—") {
+      const flowWrap = el("div", undefined, "mini-flow-diagram");
+
+      // Source node
+      const srcNode = el("div", undefined, "flow-node source-node");
+      srcNode.append(el("span", "SOURCE", "node-type-label"), el("strong", c.source));
+
+      // Arrow & amount
+      const arrowWrap = el("div", undefined, "flow-arrow-wrap");
+      const amtPill = el("div", fmt(c.amount), "flow-amount-pill");
+      const arrowLine = el("div", undefined, "flow-arrow-line");
+      const txTag = el("small", c.transactionId || "Transfer Alert", "flow-tx-tag");
+      arrowWrap.append(amtPill, arrowLine, txTag);
+
+      // Target node
+      const tgtNode = el("div", undefined, "flow-node target-node");
+      tgtNode.append(el("span", "TARGET (MULE)", "node-type-label"), el("strong", c.target));
+
+      flowWrap.append(srcNode, arrowWrap, tgtNode);
+      flowContainer.append(flowWrap);
+    } else {
+      const emptyFlow = el("div", undefined, "flow-empty-box");
+      emptyFlow.textContent = "No verified transaction flow data available for this case.";
+      flowContainer.append(emptyFlow);
+    }
+  }
+
+  if (flowMetrics) {
+    const p1 = el("div", undefined, "metric-pill");
+    p1.append(el("small", "ALERT AMOUNT"), el("strong", fmt(c.amount)));
+    const p2 = el("div", undefined, "metric-pill");
+    p2.append(el("small", "DATE / TIME"), el("strong", dateLabel(c.time)));
+    const p3 = el("div", undefined, "metric-pill");
+    p3.append(el("small", "NETWORK NODES"), el("strong", `${a.network.nodes.length} Accounts`));
+    put(flowMetrics, p1, p2, p3);
+  }
+
+  // Wire up view trail button
+  const btnTrail = $("#btnOutcomeViewTrail");
+  if (btnTrail) {
+    btnTrail.onclick = () => {
+      state.caseId = c.caseId;
+      state.selectedTx = c.transactionId || state.selectedTx;
+      state.replay = byTime.length;
+      showPage("trail");
+    };
+  }
+
+  // --- CARD 2: Evidence Chain ---
+  const evidenceList = $("#outcomeEvidenceList");
+  const evidenceBadge = $("#outcomeEvidenceBadge");
+  if (evidenceBadge) evidenceBadge.textContent = `${a.signals.length} SIGNALS`;
+
+  if (evidenceList) {
+    evidenceList.replaceChildren();
+    if (!a.signals || !a.signals.length) {
+      const emptyEv = el("div", undefined, "evidence-empty-box");
+      emptyEv.textContent = "No rule-based evidence signals detected for this case.";
+      evidenceList.append(emptyEv);
+    } else {
+      const items = a.signals.map((s, i) => {
+        const itemCard = el("div", undefined, "outcome-evidence-item");
+        const head = el("div", undefined, "evidence-item-head");
+        const numTitle = el("strong", `${String(i + 1).padStart(2, "0")} · ${s.title}`);
+
+        const hasMatch = s.transactionIds && s.transactionIds.some(id => D.transactions.some(t => t.id === id));
+        const isSim = String(c.caseId || "").startsWith("SIM-");
+        const isVerified = hasMatch && !isSim;
+
+        const badge = el(
+          "span",
+          isVerified ? "Verified in Network Data" : (isSim ? "Requires Core Verification" : "Verified Signal"),
+          `badge-evidence-pill ${isVerified ? "verified" : "unverified"}`
+        );
+        head.append(numTitle, badge);
+
+        const desc = el("p", s.detail, "evidence-item-desc");
+        const txContainer = el("div", undefined, "evidence-item-txs");
+
+        (s.transactionIds || []).forEach(txId => {
+          const btn = el("button", `Tx: ${txId}`, "tx-pill-btn");
+          btn.type = "button";
+          btn.addEventListener("click", () => {
+            state.selectedTx = txId;
+            state.replay = byTime.length;
+            showPage("trail");
+          });
+          txContainer.append(btn);
+        });
+
+        itemCard.append(head, desc, txContainer);
+        return itemCard;
+      });
+      put(evidenceList, ...items);
+    }
+  }
+
+  // --- CARD 3: AI Investigation Summary ---
+  const summaryEmpty = $("#outcomeAiEmpty");
+  const summaryText = $("#outcomeAiSummaryText");
+  const summaryBadge = $("#outcomeSummaryBadge");
+  const oldSummary = $("#outcomeAiSummary");
+
+  if (caseAiResult && caseAiResult.status === "completed") {
+    if (summaryEmpty) summaryEmpty.hidden = true;
+    if (summaryText) {
+      summaryText.hidden = false;
+      const clean = cleanAgentSummary(caseAiResult.summary);
+      summaryText.textContent = clean || "Investigation completed.";
+    }
+    if (oldSummary) oldSummary.textContent = cleanAgentSummary(caseAiResult.summary);
+    if (summaryBadge) {
+      summaryBadge.textContent = "BEDROCK VERIFIED";
+      summaryBadge.className = "soft-pill badge-completed";
+    }
+  } else {
+    if (summaryEmpty) summaryEmpty.hidden = false;
+    if (summaryText) {
+      summaryText.hidden = true;
+      summaryText.replaceChildren();
+    }
+    if (oldSummary) oldSummary.textContent = "กรุณาเริ่ม AI Investigation จากหน้า Investigation ก่อน";
+    if (summaryBadge) {
+      summaryBadge.textContent = "AWAITING AI";
+      summaryBadge.className = "soft-pill";
+    }
+  }
+
+  // --- CARD 4: Investigation Report ---
+  const reportMeta = $("#outcomeReportMetaGrid");
+  if (reportMeta) {
+    put(
+      reportMeta,
+      detailRow("Case ID", c.caseId),
+      detailRow("Target Account", c.target),
+      detailRow("Inbound Account", c.source),
+      detailRow("Alert Amount", fmt(c.amount)),
+      detailRow("Alert Priority", `${c.risk || a.risk} ${c.priorityScore ?? a.score}/100`),
+      detailRow("Investigation Assessment", caseAiResult?.status === "completed" ? "Assessed by AI" : "Pending AI Execution")
+    );
+  }
+
+  const keyFindings = $("#outcomeKeyFindings");
+  if (keyFindings) {
+    const findingsList = el("ul", undefined, "report-findings-list");
+    findingsList.append(
+      el("li", `Target account ${c.target} flagged with ${c.risk || a.risk} priority score (${c.priorityScore ?? a.score}/100).`),
+      el("li", `Inbound alert transfer of ${fmt(c.amount)} received from ${c.source}.`),
+      el("li", `${a.signals.length} behavioral anomaly signals detected across ${a.network.nodes.length} connected accounts.`),
+      caseAiResult?.status === "completed"
+        ? el("li", `Bedrock agent executed ${caseAiResult.executed_tools?.length || 0} autonomous investigation tools to analyze network behavior.`)
+        : el("li", "Autonomous AI investigation pending execution by bank officer.")
+    );
+    put(keyFindings, findingsList);
+  }
+
+  const nextActions = $("#outcomeNextActions");
+  if (nextActions) {
+    const actionsList = el("ol", undefined, "report-actions-list");
+    if (caseAiResult?.recommended_next_actions && Array.isArray(caseAiResult.recommended_next_actions) && caseAiResult.recommended_next_actions.length) {
+      caseAiResult.recommended_next_actions.slice(0, 4).forEach(act => {
+        actionsList.append(el("li", `${act} (AI Recommendation)`));
+      });
+    } else {
+      actionsList.append(
+        el("li", "ตรวจสอบเอกสารแสดงตน (KYC) และข้อมูลการเปิดบัญชีของบัญชีเป้าหมาย"),
+        el("li", "ตรวจสอบพฤติกรรมการโอนเงินต่อเนื่องและ cross-check กับรายชื่อบัญชีม้าในระบบ"),
+        el("li", "ติดต่อยืนยันความถูกต้องของคำสั่งโอนเงินกับเจ้าของบัญชีต้นทาง"),
+        el("li", "หากพบข้อบ่งชี้การฟอกเงิน ให้ส่งรายงานธุรกรรมมีเหตุอันควรสงสัย (STR) ต่อ ปปง.")
+      );
+    }
+    put(nextActions, actionsList);
+  }
+
+  // Download buttons on card
+  const btnDownloadCard = $("#btnDownloadReportCard");
+  if (btnDownloadCard) {
+    btnDownloadCard.onclick = () => download(a, c);
+  }
+}
+
+async function callAi(a, c) {
+  if (state.isInvestigating) return;
+
+  const box = $("#aiResult");
+  const button = $("#runAi");
+  const progress = $("#agentProgress");
+  const spinner = $("#invAgentSpinner");
+  const btnGoOutcome = $("#btnGoOutcome");
+
+  if (!c || !c.caseId) {
+    if (progress) progress.textContent = "กรุณาเลือกเคสก่อนเริ่มการสืบสวน";
     return;
   }
 
-  if (
-    !url.startsWith("https://") &&
-    !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)
-  ) {
-    box.textContent =
-      "API ต้องเป็น HTTPS หรือ localhost ขณะพัฒนา";
+  let url = window.MULETRACE_CONFIG?.agentApiUrl || "/api/ai/investigate";
+  if (url.startsWith("/")) url = window.location.origin + url;
+  if (!url.startsWith("https://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) {
+    if (progress) progress.textContent = "ไม่สามารถเชื่อมต่อระบบตรวจสอบได้ (Invalid URL)";
     return;
   }
 
+  const requestedCase = c.caseId;
   const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
 
-  const timeout = setTimeout(
-    () => controller.abort(),
-    20000
-  );
+  state.isInvestigating = true;
+  if (button) button.disabled = true;
+  if (spinner) spinner.hidden = false;
+  if (progress) progress.textContent = "AI is investigating this case... (Calling Bedrock Converse Tool Use)";
+  if (box) box.textContent = "กำลังตรวจสอบด้วย Bedrock Agent...";
 
-  button.disabled = true;
-  box.textContent =
-    "กำลังรอผลจาก Investigation API...";
+  const actBadge = $("#agentActivityBadge");
+  if (actBadge) {
+    actBadge.textContent = "INVESTIGATING...";
+    actBadge.className = "soft-pill badge-investigating";
+  }
+
+  const findBadge = $("#agentFindingBadge");
+  if (findBadge) {
+    findBadge.textContent = "INVESTIGATING...";
+    findBadge.className = "soft-pill badge-investigating";
+  }
 
   try {
     const response = await fetch(url, {
       method: "POST",
       credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        case_id: c.caseId,
-        language:
-          window.MuleI18N?.getLanguage?.() ||
-          window.MULETRACE_I18N?.getLanguage?.() ||
-          "th",
+        case_id: requestedCase,
+        language: window.MuleI18N?.getLanguage?.() || "th",
         investigation: {
-          case_id: c.caseId,
+          case_id: requestedCase,
           source_account: c.source,
           target_account: c.target,
           alert_amount: c.amount,
           alert_time: c.time,
-          priority_score: a.score,
-          risk_level: a.risk,
-          linked_accounts: a.network.nodes,
-          recommended_next_accounts: a.next,
-          evidence_chain: a.signals.map(s => ({
-            title: s.title,
-            detail: s.detail,
-            transaction_ids: s.transactionIds
-          })),
-          transactions: a.network.edges.map(t => ({
-            transaction_id: t.id,
-            source_account: t.from,
-            target_account: t.to,
-            amount: t.amount,
-            timestamp: t.time
-          }))
+          priority_score: c.priorityScore ?? a.score,
+          risk_level: c.risk || a.risk
         }
       }),
       signal: controller.signal,
       cache: "no-store"
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const output = await response.json().catch(() => ({ status: "error", message: "Invalid JSON response" }));
+
+    if (!response.ok || output.status !== "completed") {
+      const errMsg = output.status === "content_filtered"
+        ? "ไม่สามารถสร้างบทสรุปได้ (Content Filter Triggered) กรุณาลองใหม่อีกครั้ง"
+        : (output.message || `การตรวจสอบไม่สำเร็จ (Status: ${output.status || response.status})`);
+      throw new Error(errMsg);
     }
 
-    const output = await response.json();
-
-    if (
-      typeof output.summary !== "string" ||
-      !output.summary.trim()
-    ) {
-      throw new Error(
-        "API response missing summary"
-      );
+    if (typeof output.summary !== "string" || !cleanAgentSummary(output.summary)) {
+      throw new Error("ยังไม่ได้รับบทสรุปจากการวิเคราะห์ของ AI");
     }
 
-    state.aiText = output.summary;
+    // Cache result by case ID so switching cases never leaks stale data
+    state.aiResultsByCase[requestedCase] = output;
 
-    box.textContent = output.summary;
+    // Only update view if the officer is still on the requested case
+    if (state.caseId === requestedCase) {
+      state.aiCaseId = requestedCase;
+      state.aiResult = output;
+      state.aiText = cleanAgentSummary(output.summary);
 
-    $("#awsStatus").textContent =
-      "API RESPONDED";
+      if (progress) progress.textContent = `ตรวจสอบเสร็จสิ้น · เครื่องมือถูกเลือกใช้จริง ${output.executed_tools?.length || 0} ครั้ง`;
+      if (box) box.textContent = state.aiText;
+      if ($("#awsStatus")) $("#awsStatus").textContent = "AGENT COMPLETED";
 
+      if (btnGoOutcome) btnGoOutcome.disabled = false;
+
+      renderInvestigation(a, c);
+      renderOutcomeDashboard(a, c);
+    }
   } catch (error) {
-    box.textContent =
-      `เชื่อม API ไม่สำเร็จ: ${error.message}. ` +
-      "โหมด Rule-based ยังใช้ได้";
+    if (state.caseId === requestedCase) {
+      const isTimeout = error.name === "AbortError";
+      const displayErr = isTimeout ? "การเชื่อมต่อหมดเวลา (Request Timeout 90s) กรุณาลองใหม่" : error.message;
+      if (progress) progress.textContent = `การตรวจสอบไม่สำเร็จ: ${displayErr}`;
+      if (box) box.textContent = progress.textContent;
+      if ($("#awsStatus")) $("#awsStatus").textContent = "RETRY NEEDED";
 
-    $("#awsStatus").textContent =
-      "NOT CONNECTED";
-
+      if (actBadge) {
+        actBadge.textContent = "RETRY NEEDED";
+        actBadge.className = "soft-pill badge-retry";
+      }
+      if (findBadge) {
+        findBadge.textContent = "INCOMPLETE";
+        findBadge.className = "soft-pill badge-retry";
+      }
+    }
   } finally {
     clearTimeout(timeout);
-    button.disabled = false;
+    state.isInvestigating = false;
+    if (spinner) spinner.hidden = true;
+    if (button) button.disabled = false;
   }
 }
 
 // ==========================================
 // RENDER ALL SCREENS
 // ==========================================
-
 
 function render() {
   const c = currentCase();
@@ -1121,6 +1502,7 @@ function render() {
   renderTrail(a, c);
   renderInvestigation(a, c);
   renderEvidence(a);
+  renderOutcomeDashboard(a, c);
 
   // แปล UI หลังสร้างข้อมูลบนหน้าจอ
   window.MuleI18N?.apply();
@@ -1187,8 +1569,9 @@ function syncMuleTraceCases(incomingCases) {
       }
     }
 
-    const src = item.source && item.source !== "—" && item.source !== "-" ? item.source : "A001";
-    const tgt = item.target && item.target !== "—" && item.target !== "-" ? item.target : "B782";
+    const prev = existingById.get(item.caseId) || {};
+    const src = item.source && item.source !== "—" && item.source !== "-" ? item.source : (item.accounts?.[0] || prev?.source || "—");
+    const tgt = item.target && item.target !== "—" && item.target !== "-" ? item.target : (item.accounts?.[1] || prev?.target || "—");
 
     if (!D.accounts[src]) {
       D.accounts[src] = {
@@ -1209,7 +1592,7 @@ function syncMuleTraceCases(incomingCases) {
 
     const txId = item.transactionId || `TX-${item.caseId}`;
     const txTime = item.time || "2026-09-16T02:13:00";
-    if (!D.transactions.some(t => t.id === txId)) {
+    if (item.transactionId && Number(item.amount) > 0 && !D.transactions.some(t => t.id === txId)) {
       D.transactions.push({
         id: txId,
         from: src,
@@ -1219,7 +1602,6 @@ function syncMuleTraceCases(incomingCases) {
       });
     }
 
-    const prev = existingById.get(item.caseId) || {};
     mergedCases.push({
       ...prev,
       caseId: item.caseId,
@@ -1228,7 +1610,10 @@ function syncMuleTraceCases(incomingCases) {
       amount: Number(item.amount ?? prev.amount ?? 0),
       time: txTime,
       status: item.status || prev.status || "new",
-      transactionId: txId
+      transactionId: item.transactionId || prev.transactionId || "",
+      risk: item.risk || prev.risk,
+      priorityScore: item.priorityScore ?? prev.priorityScore,
+      description: item.description || prev.description
     });
     existingById.delete(item.caseId);
   }
@@ -1262,7 +1647,7 @@ function openCaseInvestigation(caseId, targetPage = "investigation") {
     D.transactions.find(t => t.to === c.target || t.from === c.target)?.id ||
     state.selectedTx;
   state.replay = byTime.length;
-  state.aiText = "";
+  syncCaseAiState();
 
   populateCaseSelect();
   showPage(targetPage);
@@ -1280,14 +1665,10 @@ function initialize() {
     state.caseId = select.value;
     state.selectedTx = currentCase().transactionId;
     state.replay = byTime.length;
-    state.aiText = "";
+    syncCaseAiState();
 
     $("#awsStatus").textContent =
-      "NOT CONNECTED";
-
-    $("#aiResult").textContent =
-      "ยังไม่ได้เชื่อม AWS · " +
-      "ใช้รายงานแบบ Rule-based ได้";
+      state.aiResult ? "AGENT COMPLETED" : "NOT CONNECTED";
 
     render();
   });
@@ -1319,11 +1700,22 @@ function initialize() {
     render();
   });
 
-  $("#downloadReport").addEventListener("click", () => {
+  $("#downloadReport")?.addEventListener("click", () => {
     download(
       analyze(currentCase()),
       currentCase()
     );
+  });
+
+  $("#btnDownloadReportCard")?.addEventListener("click", () => {
+    download(
+      analyze(currentCase()),
+      currentCase()
+    );
+  });
+
+  $("#btnGoOutcome")?.addEventListener("click", () => {
+    showPage("report");
   });
 
   // Logout Action
