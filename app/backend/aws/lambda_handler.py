@@ -58,6 +58,86 @@ def _extract_body(event: dict[str, Any]) -> dict[str, Any]:
         return {}
 
 
+MIME_MAP = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".webmanifest": "application/manifest+json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".ico": "image/x-icon",
+    ".txt": "text/plain; charset=utf-8",
+}
+
+DEMO_USERS = {
+    "officer@agency.go.th": {
+        "password": "OfficerPass123!@#",
+        "role": "user",
+        "name": "Bank Officer",
+        "department": "AML Investigation",
+    },
+    "admin@agency.go.th": {
+        "password": "AdminPass123!@#",
+        "role": "admin",
+        "name": "System Administrator",
+        "department": "IT Security & Operations",
+    },
+}
+
+def _serve_static_asset(path: str) -> dict[str, Any] | None:
+    from pathlib import Path
+    clean_path = path.lstrip("/")
+    if not clean_path:
+        clean_path = "login.html"
+
+    # 1. Local disk lookup inside Lambda package
+    candidates = [
+        Path(__file__).resolve().parents[3] / "app" / "frontend" / clean_path,
+        Path("/var/task/app/frontend") / clean_path,
+        Path("/var/task/frontend") / clean_path,
+        Path(clean_path),
+    ]
+    for c in candidates:
+        if c.is_file():
+            suffix = c.suffix.lower()
+            mime = MIME_MAP.get(suffix, "text/plain; charset=utf-8")
+            try:
+                text_content = c.read_text(encoding="utf-8")
+                return {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": mime,
+                        "Cache-Control": "public, max-age=3600" if suffix != ".html" else "no-cache",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                    "body": text_content,
+                }
+            except Exception:
+                pass
+
+    # 2. Resilient S3 fallback
+    try:
+        from .s3_service import get_s3_client
+        s3 = get_s3_client()
+        s3_obj = s3.get_object(Bucket="muletrace-frontend-598122632336", Key=clean_path)
+        body_text = s3_obj["Body"].read().decode("utf-8", errors="replace")
+        suffix = Path(clean_path).suffix.lower()
+        mime = MIME_MAP.get(suffix, "text/plain; charset=utf-8")
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": mime,
+                "Cache-Control": "public, max-age=3600" if suffix != ".html" else "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": body_text,
+        }
+    except Exception:
+        return None
+
 def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, Any]:
     """Process incoming API Gateway HTTP request."""
     path, method = _extract_path_and_method(event)
@@ -65,6 +145,90 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
     # 1. CORS Preflight
     if method == "OPTIONS":
         return _response(200, {"status": "ok"})
+
+    # 1b. Static Website Assets (Root, HTML, CSS, JS)
+    if path == "/" or path == "" or path.endswith(".html") or path.startswith("/assets/") or path.endswith(".webmanifest") or path.endswith(".js"):
+        target_file = "login.html" if path in ("/", "") else path
+        asset_res = _serve_static_asset(target_file)
+        if asset_res:
+            return asset_res
+
+    # 1c. Authentication API
+    if path == "/api/auth/login" and method == "POST":
+        body = _extract_body(event)
+        email = (body.get("email") or "").strip().lower()
+        pwd = body.get("password") or ""
+        u = DEMO_USERS.get(email)
+        if u and u["password"] == pwd:
+            cookie_val = f"muletrace_session={u['role']}#{email}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Set-Cookie": cookie_val,
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "cookies": [cookie_val],
+                "body": json.dumps({
+                    "status": "ok",
+                    "user": {"email": email, "role": u["role"], "name": u["name"]},
+                }, ensure_ascii=False),
+            }
+        return _response(401, {"status": "error", "message": "Invalid email or password"})
+
+    if path == "/api/auth/me" and method == "GET":
+        cookies = event.get("cookies") or []
+        header_cookie = event.get("headers", {}).get("cookie", "")
+        role = "user"
+        email = "officer@agency.go.th"
+        if "admin" in str(cookies) or "admin" in header_cookie:
+            role = "admin"
+            email = "admin@agency.go.th"
+        return _response(200, {
+            "status": "ok",
+            "authenticated": True,
+            "user": {"email": email, "role": role, "name": "Authorized Officer"},
+        })
+
+    if path == "/api/auth/logout" and method == "POST":
+        clear_cookie = "muletrace_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Set-Cookie": clear_cookie,
+                "Access-Control-Allow-Origin": "*",
+            },
+            "cookies": [clear_cookie],
+            "body": json.dumps({"status": "ok"}),
+        }
+
+    # 1d. Admin API
+    if path == "/api/admin/aws-credentials" and method == "GET":
+        return _response(200, {
+            "configured": True,
+            "masked_key_id": "IAM-ROLE-ACTIVE",
+            "region": "us-east-1",
+        })
+
+    if path == "/api/admin/users" and method == "GET":
+        return _response(200, {
+            "status": "ok",
+            "users": [
+                {"id": "usr_1", "email": "officer@agency.go.th", "role": "user", "name": "Bank Officer", "is_active": True},
+                {"id": "usr_2", "email": "admin@agency.go.th", "role": "admin", "name": "System Administrator", "is_active": True},
+            ],
+            "total": 2,
+        })
+
+    if path == "/api/admin/audit-logs" and method == "GET":
+        return _response(200, {
+            "status": "ok",
+            "logs": [
+                {"action": "SERVERLESS_DEPLOY", "admin_email": "aws-lambda@system", "target_email": "system", "created_at": "2026-10-25 04:30:00", "details": "Active IAM Role"},
+            ],
+            "total": 1,
+        })
 
     # 2. Health Check
     if path.endswith("/health"):

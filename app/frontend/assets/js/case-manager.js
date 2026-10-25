@@ -415,19 +415,19 @@
           <td>${escapeHTML(score)}</td>
 
           <td>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <div class="mtcm-actions-cell">
               <button type="button"
-                class="mtcm-view"
+                class="mtcm-view mtcm-btn-action mtcm-btn-view"
                 data-action="view"
                 data-id="${escapeHTML(item.caseId)}">
                 ${tr("รายละเอียด", "Details")}
               </button>
               <button type="button"
-                class="mtcm-view"
-                style="background: #745b3e; color: #fff; border-color: #745b3e;"
+                class="mtcm-view mtcm-btn-action mtcm-btn-investigate"
                 data-action="investigate"
                 data-id="${escapeHTML(item.caseId)}">
-                ${tr("สืบสวน →", "Investigate →")}
+                <span>${tr("สืบสวน", "Investigate")}</span>
+                <span class="action-arrow">→</span>
               </button>
             </div>
           </td>

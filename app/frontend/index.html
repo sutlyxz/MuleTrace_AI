@@ -463,18 +463,30 @@
         <!-- หน้าที่ 4: Investigation -->
         <section class="page" id="page-investigation" hidden>
 
-          <div class="section-head">
+          <div class="section-head investigation-head">
             <div>
               <p class="eyebrow">INVESTIGATION WORKSPACE</p>
               <h2 id="investigationHeading">
                 Case investigation
               </h2>
             </div>
-            <span class="soft-pill" id="priorityLabel">—</span>
+            <div class="investigation-head-right">
+              <span class="soft-pill" id="priorityLabel">—</span>
+              <div class="investigation-quick-nav">
+                <button class="btn btn-inv-action subtle" data-go="trail" title="Money Trail">
+                  <span class="btn-inv-icon">◎</span>
+                  <span>เส้นทางเงิน</span>
+                </button>
+                <button class="btn btn-inv-action subtle" data-go="report" title="Evidence Chain">
+                  <span class="btn-inv-icon">▣</span>
+                  <span>ห่วงโซ่หลักฐาน</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div class="two-col">
-            <section class="panel">
+          <div class="two-col investigation-two-col">
+            <section class="panel panel-investigation-summary">
               <h3>Investigation Summary</h3>
               <div id="caseSummary"></div>
 
@@ -554,27 +566,6 @@
                 <button class="btn subtle" id="runAi">
                   ขอ AI Summary ผ่าน API
                 </button>
-                <button type="button" class="btn subtle" id="toggleAwsKeyBox">
-                  ⚙️ อัปเดต AWS Key
-                </button>
-              </div>
-
-              <div id="awsKeyPanel" hidden style="margin-top: 12px; padding: 12px; border: 1px solid #e2dbd0; border-radius: 10px; background: #fbf9f5;">
-                <label for="dashboardAwsRawInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #554838;">
-                  วาง AWS Credentials ([default] จาก AWS Academy) เพื่ออัปเดตทันที:
-                </label>
-                <textarea
-                  id="dashboardAwsRawInput"
-                  rows="4"
-                  placeholder="[default]&#10;aws_access_key_id=ASIA...&#10;aws_secret_access_key=...&#10;aws_session_token=..."
-                  style="width: 100%; font-family: monospace; font-size: 12px; padding: 8px 10px; border: 1px solid #d8d1c5; border-radius: 8px; box-sizing: border-box; margin-bottom: 8px;"
-                ></textarea>
-                <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                  <small id="dashboardAwsKeyStatus" style="color: #554838;"></small>
-                  <button type="button" class="btn primary" id="saveDashboardAwsKeyBtn" style="padding: 7px 14px; font-size: 12.5px;">
-                    บันทึก AWS Key
-                  </button>
-                </div>
               </div>
 
               <div id="aiResult" class="ai-result" aria-live="polite">

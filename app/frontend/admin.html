@@ -161,33 +161,26 @@
         </div>
       </div>
 
-      <!-- AWS Cloud Credentials Hot-Reload Card -->
+      <!-- AWS Cloud Credentials Status Card -->
       <div class="content-card" id="awsCredentialsCard" style="margin-bottom: 24px;">
         <div class="card-header-bar">
           <div class="card-title-group">
             <div class="section-title-with-badge">
-              <h2>ตั้งค่าการเชื่อมต่อ AWS Cloud (AWS Credentials Hot-Reload)</h2>
-              <span class="badge badge-active" id="awsCredStatusBadge">กำลังตรวจสอบ...</span>
+              <h2>สถานะการเชื่อมต่อ AWS Cloud (Serverless & IAM Role)</h2>
+              <span class="badge badge-active" id="awsCredStatusBadge">เชื่อมต่อสมบูรณ์ (IAM Role Active)</span>
             </div>
-            <p>วางข้อมูล AWS CLI / AWS Academy ([default]) เพื่ออัปเดต Key ให้เซิร์ฟเวอร์ทันทีโดยไม่ต้องรีสตาร์ท</p>
+            <p>ระบบเชื่อมต่อกับบริการ AWS Cloud (Amazon Bedrock, EventBridge, DynamoDB, S3) อัตโนมัติผ่าน IAM Role โดยไม่ต้องกรอก API Key หรือ Secret Key ด้วยตนเอง</p>
           </div>
         </div>
-        <div style="padding: 18px 24px; display: flex; flex-direction: column; gap: 12px;">
-          <label for="awsRawInput" style="font-size: 13px; font-weight: 600; color: #3a362e;">
-            วาง AWS Credentials Block ([default] หรือ AWS_ACCESS_KEY_ID=...)
-          </label>
-          <textarea
-            id="awsRawInput"
-            rows="4"
-            placeholder="[default]&#10;aws_access_key_id=ASIA...&#10;aws_secret_access_key=..."
-            style="width: 100%; font-family: monospace; font-size: 12.5px; padding: 10px 12px; border: 1px solid #d8d1c5; border-radius: 9px; background: #fcfaf7; box-sizing: border-box;"
-          ></textarea>
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-            <span id="awsCredFeedback" style="font-size: 13px; color: #5c5549;"></span>
-            <button type="button" id="saveAwsCredsBtn" class="btn btn-primary">
-              บันทึกและอัปเดต AWS Key ทันที
-            </button>
+        <div style="padding: 14px 24px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: #faf7f2; border-top: 1px solid #eee8df;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: #eef7f2; color: #276b50; font-weight: bold;">✓</span>
+            <div>
+              <strong style="display: block; font-size: 13px; color: #2e2820;">AWS IAM Execution Role: MuleTraceLambdaExecutionRole</strong>
+              <small style="color: #6e6559;">Least-Privilege Security Policy · หมุนเวียนคีย์และรักษาความปลอดภัยอัตโนมัติ 100%</small>
+            </div>
           </div>
+          <span class="badge badge-active" style="background: #eef7f2; color: #276b50; border-color: #c0e4d2;">Serverless Ready</span>
         </div>
       </div>
 

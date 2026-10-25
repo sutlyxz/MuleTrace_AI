@@ -366,6 +366,18 @@
       "RULE-BASED ENGINE"
     );
 
+    text(
+      '#page-investigation [data-go="trail"].btn-inv-action span:last-child',
+      "เส้นทางเงิน",
+      "Money Trail"
+    );
+
+    text(
+      '#page-investigation [data-go="report"].btn-inv-action span:last-child',
+      "ห่วงโซ่หลักฐาน",
+      "Evidence Chain"
+    );
+
     // =====================================
     // EVIDENCE & REPORT
     // =====================================

@@ -41,6 +41,33 @@ class TestLambdaHandler(unittest.TestCase):
         body = json.loads(res["body"])
         self.assertIn("cases", body)
 
+    def test_lambda_static_login_asset(self):
+        event = {
+            "httpMethod": "GET",
+            "path": "/login.html",
+        }
+        res = lambda_handler(event)
+        self.assertEqual(res["statusCode"], 200)
+        self.assertIn("text/html", res["headers"]["Content-Type"])
+
+    def test_lambda_auth_login_and_me(self):
+        login_event = {
+            "httpMethod": "POST",
+            "path": "/api/auth/login",
+            "body": json.dumps({"email": "officer@agency.go.th", "password": "OfficerPass123!@#"}),
+        }
+        res = lambda_handler(login_event)
+        self.assertEqual(res["statusCode"], 200)
+        data = json.loads(res["body"])
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["user"]["role"], "user")
+
+        me_event = {
+            "httpMethod": "GET",
+            "path": "/api/auth/me",
+        }
+        me_res = lambda_handler(me_event)
+        self.assertEqual(me_res["statusCode"], 200)
     def test_lambda_api_gateway_ai_summary(self):
         event = {
             "httpMethod": "POST",

@@ -55,7 +55,7 @@ def prepare_runtime(root: Path) -> Path:
 def local_commands(root: Path, settings) -> tuple[list[str], list[str]]:
     frontend = [
         sys.executable, '-m', 'app.backend.server', str(settings.frontend_port),
-        '--bind', '127.0.0.1', '--directory', str(root / 'app' / 'frontend'),
+        '--bind', '0.0.0.0', '--directory', str(root / 'app' / 'frontend'),
     ]
     scanner = [
         sys.executable, '-m', 'app.backend.workers.auto_scanner',

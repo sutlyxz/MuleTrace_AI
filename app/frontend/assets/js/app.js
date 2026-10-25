@@ -722,22 +722,25 @@ function renderInvestigation(a, c) {
   $("#investigationHeading").textContent =
     `${c.caseId} · ${c.target}`;
 
-  $("#priorityLabel").textContent =
-    `${a.risk} · ${a.score}/100`;
+  const priorityEl = $("#priorityLabel");
+  priorityEl.textContent = `${a.risk} · ${a.score}/100`;
+  const riskClass = (a.risk || "medium").toLowerCase();
+  priorityEl.setAttribute("data-risk", riskClass);
 
   const summary = $("#caseSummary");
 
   const wrap = el(
     "div",
     undefined,
-    "summary-score"
+    `summary-score risk-${riskClass}`
   );
+  wrap.setAttribute("data-risk", riskClass);
 
-  wrap.append(
-    el("div", String(a.score), "score-circle")
-  );
+  const circle = el("div", String(a.score), "score-circle");
+  circle.setAttribute("data-risk", riskClass);
+  wrap.append(circle);
 
-  const txt = el("div");
+  const txt = el("div", undefined, "summary-score-text");
 
   txt.append(
     el("strong", `${a.risk} investigation priority`),
@@ -751,13 +754,27 @@ function renderInvestigation(a, c) {
 
   wrap.append(txt);
 
-  put(
-    summary,
-    wrap,
+  const grid = el("div", undefined, "case-metrics-grid");
+  grid.append(
     detailRow("Alert source", c.source),
     detailRow("Target", c.target),
     detailRow("Alert amount", fmt(c.amount)),
     detailRow("Alert date", dateLabel(c.time))
+  );
+
+  const signalsStrip = el("div", undefined, "investigation-signals-strip");
+  if (a.signals && a.signals.length) {
+    a.signals.forEach(s => {
+      const pill = el("span", s.title, "signal-tag");
+      signalsStrip.append(pill);
+    });
+  }
+
+  put(
+    summary,
+    wrap,
+    grid,
+    signalsStrip
   );
 
   // Tool Activity ในโหมดกฎจำลอง
@@ -786,8 +803,9 @@ function renderInvestigation(a, c) {
 
   put(
     $("#toolSteps"),
-    ...stepNames.map(([name, desc]) => {
+    ...stepNames.map(([name, desc], idx) => {
       const li = el("li");
+      li.setAttribute("data-step", String(idx + 1).padStart(2, "0"));
 
       li.append(
         el("strong", name),
@@ -804,10 +822,14 @@ function renderInvestigation(a, c) {
       const chip = el(
         "button",
         `${x.id} · ${x.score} points`,
-        "chip clickable"
+        "chip clickable rec-account-card"
       );
       chip.type = "button";
       chip.style.cursor = "pointer";
+      chip.setAttribute("data-score", x.score);
+      if (x.score >= 50) {
+        chip.classList.add("rec-high-risk");
+      }
       chip.addEventListener("click", () => {
         const linkedTx = D.transactions.find(
           t => t.from === x.id || t.to === x.id

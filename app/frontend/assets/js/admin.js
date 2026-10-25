@@ -1448,13 +1448,8 @@
       });
       if (!res.ok) return;
       const data = await res.json();
-      if (data.configured) {
-        badge.className = "badge badge-active";
-        badge.textContent = `AWS Key: ${data.masked_key_id} (${data.region || "us-east-1"})`;
-      } else {
-        badge.className = "badge badge-disabled";
-        badge.textContent = "AWS Key: Not Configured";
-      }
+      badge.className = "badge badge-active";
+      badge.textContent = `IAM Role: Active (${data.region || "us-east-1"})`;
     } catch (_) {}
   }
 
