@@ -51,6 +51,24 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertIn("text/html", res["headers"]["Content-Type"])
 
     def test_lambda_auth_login_and_me(self):
+        # 1. Reject invalid credentials
+        bad_login = {
+            "httpMethod": "POST",
+            "path": "/api/auth/login",
+            "body": json.dumps({"email": "officer@agency.go.th", "password": "WrongPassword!"}),
+        }
+        bad_res = lambda_handler(bad_login)
+        self.assertEqual(bad_res["statusCode"], 401)
+
+        # 2. Reject unauthenticated /me
+        no_cookie_me = {
+            "httpMethod": "GET",
+            "path": "/api/auth/me",
+        }
+        no_res = lambda_handler(no_cookie_me)
+        self.assertEqual(no_res["statusCode"], 401)
+
+        # 3. Successful login returns cryptographically signed cookie
         login_event = {
             "httpMethod": "POST",
             "path": "/api/auth/login",
@@ -59,15 +77,30 @@ class TestLambdaHandler(unittest.TestCase):
         res = lambda_handler(login_event)
         self.assertEqual(res["statusCode"], 200)
         data = json.loads(res["body"])
-        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["status"], "success")
         self.assertEqual(data["user"]["role"], "user")
+        self.assertIn("cookies", res)
 
+        # 4. Valid session cookie verifies successfully
+        cookie_header = res["cookies"][0].split(";")[0]
         me_event = {
             "httpMethod": "GET",
             "path": "/api/auth/me",
+            "headers": {"cookie": cookie_header},
         }
         me_res = lambda_handler(me_event)
         self.assertEqual(me_res["statusCode"], 200)
+        me_data = json.loads(me_res["body"])
+        self.assertEqual(me_data["status"], "success")
+        self.assertEqual(me_data["user"]["role"], "user")
+
+        # 5. Tampered cookie is rejected
+        tampered_event = {
+            "httpMethod": "GET",
+            "path": "/api/auth/me",
+            "headers": {"cookie": cookie_header + "tampered"},
+        }
+        self.assertEqual(lambda_handler(tampered_event)["statusCode"], 401)
     def test_lambda_api_gateway_ai_summary(self):
         event = {
             "httpMethod": "POST",

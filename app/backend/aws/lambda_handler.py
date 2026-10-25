@@ -72,20 +72,78 @@ MIME_MAP = {
     ".txt": "text/plain; charset=utf-8",
 }
 
-DEMO_USERS = {
+import base64
+import hashlib
+import hmac
+import time
+
+_HMAC_SECRET = b"muletrace_serverless_hmac_secret_key_2026_us_east_1"
+_SALT = b"muletrace_fixed_demo_salt_2026"
+
+def _hash_password_pbkdf2(password: str) -> str:
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), _SALT, 100_000)
+    return dk.hex()
+
+def _verify_password_pbkdf2(password: str, expected_hex: str) -> bool:
+    if not password or not expected_hex:
+        return False
+    computed = _hash_password_pbkdf2(password)
+    return hmac.compare_digest(computed, expected_hex)
+
+_DEMO_USERS = {
     "officer@agency.go.th": {
-        "password": "OfficerPass123!@#",
+        "id": "usr_officer",
+        "password_hash": "fee601524ac174b438832d6b0a94ab63e8b9a3ae60180e5cb39288894aadfdb8",
         "role": "user",
         "name": "Bank Officer",
         "department": "AML Investigation",
     },
     "admin@agency.go.th": {
-        "password": "AdminPass123!@#",
+        "id": "usr_admin",
+        "password_hash": "f9ac3df11ab23f163b1548406355a10f0039de6983f4e55d80b52cbfd01f295d",
         "role": "admin",
         "name": "System Administrator",
         "department": "IT Security & Operations",
     },
 }
+
+def _create_session_token(payload: dict[str, Any]) -> str:
+    payload_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+    b64_payload = base64.urlsafe_b64encode(payload_bytes).decode("utf-8").rstrip("=")
+    sig = hmac.new(_HMAC_SECRET, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{b64_payload}.{sig}"
+
+def _verify_session_token(token: str | None) -> dict[str, Any] | None:
+    if not token or "." not in token:
+        return None
+    b64_payload, sig = token.split(".", 1)
+    expected_sig = hmac.new(_HMAC_SECRET, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        return None
+    try:
+        padded = b64_payload + "=" * (-len(b64_payload) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return payload
+    except Exception:
+        return None
+
+def _extract_cookie_token(event: dict[str, Any]) -> str | None:
+    cookies = event.get("cookies") or []
+    for c in cookies:
+        if c.startswith("muletrace_session="):
+            return c.split("=", 1)[1].split(";", 1)[0].strip()
+
+    headers = event.get("headers") or {}
+    cookie_hdr = headers.get("cookie") or headers.get("Cookie") or ""
+    if "muletrace_session=" in cookie_hdr:
+        for part in cookie_hdr.split(";"):
+            part = part.strip()
+            if part.startswith("muletrace_session="):
+                return part.split("=", 1)[1].strip()
+
+    return None
 
 def _serve_static_asset(path: str) -> dict[str, Any] | None:
     from pathlib import Path
@@ -138,6 +196,7 @@ def _serve_static_asset(path: str) -> dict[str, Any] | None:
     except Exception:
         return None
 
+
 def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, Any]:
     """Process incoming API Gateway HTTP request."""
     path, method = _extract_path_and_method(event)
@@ -153,41 +212,58 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
         if asset_res:
             return asset_res
 
-    # 1c. Authentication API
+    # 1c. Secure Authentication API
     if path == "/api/auth/login" and method == "POST":
         body = _extract_body(event)
         email = (body.get("email") or "").strip().lower()
         pwd = body.get("password") or ""
-        u = DEMO_USERS.get(email)
-        if u and u["password"] == pwd:
-            cookie_val = f"muletrace_session={u['role']}#{email}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
-            return {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Set-Cookie": cookie_val,
-                    "Access-Control-Allow-Origin": "*",
-                },
-                "cookies": [cookie_val],
-                "body": json.dumps({
-                    "status": "ok",
-                    "user": {"email": email, "role": u["role"], "name": u["name"]},
-                }, ensure_ascii=False),
-            }
-        return _response(401, {"status": "error", "message": "Invalid email or password"})
+        u = _DEMO_USERS.get(email)
+        if not u or not _verify_password_pbkdf2(pwd, u["password_hash"]):
+            return _response(401, {"status": "error", "message": "Invalid email or password"})
+
+        user_data = {
+            "id": u["id"],
+            "email": email,
+            "role": u["role"],
+            "name": u["name"],
+            "department": u.get("department", "AML Investigation"),
+        }
+        token_payload = {
+            **user_data,
+            "exp": time.time() + 86400,
+        }
+        raw_token = _create_session_token(token_payload)
+        cookie_val = f"muletrace_session={raw_token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=86400"
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Set-Cookie": cookie_val,
+                "Access-Control-Allow-Origin": "*",
+            },
+            "cookies": [cookie_val],
+            "body": json.dumps({
+                "status": "success",
+                "user": user_data,
+            }, ensure_ascii=False),
+        }
 
     if path == "/api/auth/me" and method == "GET":
-        cookies = event.get("cookies") or []
-        header_cookie = event.get("headers", {}).get("cookie", "")
-        role = "user"
-        email = "officer@agency.go.th"
-        if "admin" in str(cookies) or "admin" in header_cookie:
-            role = "admin"
-            email = "admin@agency.go.th"
+        token = _extract_cookie_token(event)
+        if not token:
+            return _response(401, {"status": "error", "message": "Authentication required"})
+        payload = _verify_session_token(token)
+        if not payload:
+            return _response(401, {"status": "error", "message": "Invalid or expired session"})
         return _response(200, {
-            "status": "ok",
-            "authenticated": True,
-            "user": {"email": email, "role": role, "name": "Authorized Officer"},
+            "status": "success",
+            "user": {
+                "id": payload.get("id"),
+                "email": payload.get("email"),
+                "role": payload.get("role"),
+                "name": payload.get("name"),
+                "department": payload.get("department", "AML Investigation"),
+            },
         })
 
     if path == "/api/auth/logout" and method == "POST":
@@ -200,7 +276,7 @@ def handle_api_request(event: dict[str, Any], context: Any = None) -> dict[str, 
                 "Access-Control-Allow-Origin": "*",
             },
             "cookies": [clear_cookie],
-            "body": json.dumps({"status": "ok"}),
+            "body": json.dumps({"status": "success", "message": "Logged out successfully"}),
         }
 
     # 1d. Admin API
