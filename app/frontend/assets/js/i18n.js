@@ -98,14 +98,14 @@
         "รายการเคส",
         "เส้นทางเงิน",
         "การสืบสวน",
-        "หลักฐานและรายงาน"
+        "ผลลัพธ์และรายงาน"
       ],
       [
         "Overview",
         "Case Queue",
         "Money Trail",
         "Investigation",
-        "Evidence & Report"
+        "Outcome & Report"
       ]
     );
 
@@ -157,7 +157,7 @@
       cases: ["รายการเคส", "Case Queue"],
       trail: ["เส้นทางเงิน", "Money Trail"],
       investigation: ["การสืบสวน", "Investigation"],
-      report: ["หลักฐานและรายงาน", "Evidence & Report"]
+      report: ["ผลลัพธ์และรายงาน", "Outcome & Report"]
     };
 
     if (pageTitles[page]) {
@@ -361,12 +361,6 @@
     );
 
     text(
-      "#page-investigation .two-col .soft-pill",
-      "ระบบกฎอัตโนมัติ",
-      "RULE-BASED ENGINE"
-    );
-
-    text(
       '#page-investigation [data-go="trail"].btn-inv-action span:last-child',
       "เส้นทางเงิน",
       "Money Trail"
@@ -374,12 +368,12 @@
 
     text(
       '#page-investigation [data-go="report"].btn-inv-action span:last-child',
-      "ห่วงโซ่หลักฐาน",
-      "Evidence Chain"
+      "ผลลัพธ์และรายงาน",
+      "Outcome & Report"
     );
 
     // =====================================
-    // EVIDENCE & REPORT
+    // OUTCOME & REPORT
     // =====================================
 
     text(
@@ -390,8 +384,8 @@
 
     text(
       "#page-report > .section-head h2",
-      "หลักฐานและรายงาน",
-      "Evidence Chain & Report"
+      "ผลลัพธ์และรายงานการสืบสวน",
+      "Outcome & Report"
     );
 
     text(
@@ -400,36 +394,10 @@
       "↓ Download Report"
     );
 
-    list(
-      "#page-report h3",
-      [
-        "ห่วงโซ่หลักฐาน",
-        "เชื่อมโยงเคสก่อนหน้า",
-        "เชื่อมต่อ AWS Agent"
-      ],
-      [
-        "Evidence Chain",
-        "Cross-Case Connections",
-        "AWS Agent Handoff"
-      ]
-    );
-
-    text(
-      "#page-report > .panel .section-head .helper",
-      "อ้างอิงรหัสธุรกรรมจากข้อมูลจำลอง",
-      "References synthetic transaction IDs"
-    );
-
-    text(
-      "#page-report .two-col .panel:last-child .helper",
-      "พื้นที่รับข้อมูลจริงจาก Backend ของทีม · ยังไม่เรียก Bedrock โดยอัตโนมัติ",
-      "Receives results from the team's backend · Bedrock is not called automatically"
-    );
-
     text(
       "#runAi",
-      "ขอสรุปผลจาก AI API",
-      "Request AI Summary via API"
+      "▶ Run AI Investigation",
+      "▶ Run AI Investigation"
     );
 
     text(
@@ -585,37 +553,7 @@
       `${result.signals.length} evidence signals · ${result.network.nodes.length} linked accounts`
     );
 
-    // Tool activity descriptions
-    const steps = [
-      [
-        `ตรวจข้อมูลบัญชี ${selectedCase.target}`,
-        `Check profile for ${selectedCase.target}`
-      ],
-      [
-        "ดึงประวัติรับและโอนเงิน",
-        "Retrieve incoming and outgoing transfers"
-      ],
-      [
-        `ขยายเครือข่าย 3 ทอด (${result.network.nodes.length} บัญชี)`,
-        `Explore 3 hops (${result.network.nodes.length} accounts)`
-      ],
-      [
-        `พบ ${result.overlaps.length} เคสก่อนหน้าที่เกี่ยวข้อง`,
-        `Find ${result.overlaps.length} linked previous cases`
-      ],
-      [
-        `คะแนนลำดับความสำคัญ ${result.score}/100`,
-        `Investigation priority score ${result.score}/100`
-      ]
-    ];
-
-    $$("#toolSteps li small").forEach(
-      (element, index) => {
-        if (steps[index]) {
-          element.textContent = choose(...steps[index]);
-        }
-      }
-    );
+    // Dynamic tool activities are managed directly by renderAgentTrace() based on real API results.
 
     // Recommended Accounts
     $$("#recommendedAccounts .chip").forEach(

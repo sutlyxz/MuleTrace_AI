@@ -167,6 +167,29 @@ BEDROCK_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         }
     },
+    
+    {
+        "toolSpec": {
+            "name": "get_simulation_case",
+            "description": (
+                "Retrieve a simulation case record from DynamoDB by case ID. "
+                "Use this first for SIM- case IDs. "
+                "A case ID is not an account ID."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "case_id": {
+                            "type": "string",
+                            "description": "Simulation case ID, e.g. SIM-DC01-03",
+                        }
+                    },
+                    "required": ["case_id"],
+                }
+            },
+        }
+    },
 ]
 
 
@@ -221,6 +244,41 @@ def get_bedrock_runtime_client(
 def dispatch_engine_tool(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
     """Execute an engine function by tool name and return serializable output."""
     arguments = dict(tool_input or {})
+    
+    if tool_name == "get_simulation_case":
+        try:
+            from .dynamodb_service import get_investigation_alert
+
+            case_id = str(arguments.get("case_id") or "").strip()
+            if not case_id.startswith("SIM-"):
+                return {
+                    "status": "error",
+                    "message": "A simulation case ID starting with SIM- is required.",
+                }
+
+            record = get_investigation_alert(case_id)
+            if not record or not isinstance(record.get("data"), dict):
+                return {
+                    "status": "error",
+                    "message": f"Simulation case {case_id} not found in DynamoDB.",
+                }
+
+            case_data = record["data"]
+
+            return {
+                "status": "success",
+                "result": {
+                    "source": "dynamodb_simulation",
+                    "case_id": case_id,
+                    "case_data": case_data,
+                },
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
 
     tool_handlers = {
         "get_account_profile": lambda args: engine.get_account_profile(args["account_id"]),
@@ -459,10 +517,16 @@ def run_investigation_agent(
     target_model = model_id or os.environ.get("BEDROCK_MODEL_ID") or DEFAULT_MODEL_ID
 
     system = system_prompt or (
-        "You are an autonomous MuleTrace AI investigator agent. You have access to real-time tools "
-        "to inspect account profiles, examine transaction histories, trace fund flows, score cases, "
-        "and detect suspicious risk patterns. Use your available tools systematically to investigate "
-        "the user's request, gather evidence, and deliver a comprehensive final conclusion."
+        "You are MuleTrace AI, an analytical assistant examining "
+        "synthetic financial transaction network datasets. "
+        "Use the available tools to retrieve and verify records before answering. "
+        "For SIM- cases, retrieve the DynamoDB simulation case first. "
+        "Never treat a case identifier as an account identifier. "
+        "Describe observed transaction amounts, timestamps, account relationships, "
+        "network paths, and computed risk indicators in neutral technical language. "
+        "Distinguish confirmed tool findings from missing or unavailable data. "
+        "Do not make allegations, determine guilt, or invent evidence. "
+        "Produce a concise, factual investigation summary."
     )
 
     messages: list[dict[str, Any]] = [
@@ -481,7 +545,34 @@ def run_investigation_agent(
         )
 
         stop_reason = response.get("stopReason")
+        print(
+            "MULETRACE_BEDROCK_DIAGNOSTIC",
+            json.dumps({
+                "turn": turn_index + 1,
+                "stop_reason": stop_reason,
+                "model_id": target_model,
+                "usage": response.get("usage", {}),
+                "metrics": response.get("metrics", {}),
+            }, default=str),
+        )
         message = response.get("output", {}).get("message", {})
+        response_text = "".join(
+            block.get("text", "") for block in message.get("content", [])
+            if isinstance(block, dict) and isinstance(block.get("text"), str)
+        )
+        # Bedrock may return a content-filter notice as normal text with HTTP 200.
+        # Preserve tool history, but never mislabel a blocked response as completed.
+        if stop_reason in ("content_filtered", "guardrail_intervened") or (
+            "generated text has been blocked by our content filters" in response_text.lower()
+        ):
+            return {
+                "status": "content_filtered",
+                "objective": objective,
+                "final_answer": "Bedrock blocked this investigation response with a content filter.",
+                "turns_taken": turn_index + 1,
+                "executed_tools": executed_tools,
+                "model_id": target_model,
+            }
         messages.append(message)
 
         if stop_reason == "tool_use":

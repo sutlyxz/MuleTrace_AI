@@ -228,7 +228,7 @@
           ◇ <span>Investigation</span>
         </button>
         <button class="nav-item" data-page="report">
-          ▣ <span>Evidence & Report</span>
+          ▣ <span>Outcome & Report</span>
         </button>
       </nav>
 
@@ -460,119 +460,329 @@
           </section>
         </section>
 
-        <!-- หน้าที่ 4: Investigation -->
+        <!-- หน้าที่ 4: Investigation Workspace -->
         <section class="page" id="page-investigation" hidden>
 
-          <div class="section-head investigation-head">
-            <div>
-              <p class="eyebrow">INVESTIGATION WORKSPACE</p>
-              <h2 id="investigationHeading">
-                Case investigation
-              </h2>
+          <!-- A. Case Header -->
+          <div class="panel inv-case-header-panel">
+            <div class="inv-case-header-top">
+              <div>
+                <span class="eyebrow">AI INVESTIGATION WORKSPACE</span>
+                <h2 id="investigationHeading">Case Investigation</h2>
+              </div>
+              <div class="inv-header-badges">
+                <div class="score-badge-group">
+                  <span class="badge-label">Alert Priority</span>
+                  <span class="soft-pill" id="priorityLabel">—</span>
+                </div>
+                <div class="score-badge-group">
+                  <span class="badge-label">Investigation Assessment</span>
+                  <span class="soft-pill" id="invAiAssessmentBadge">AWAITING AI</span>
+                </div>
+                <div class="investigation-quick-nav">
+                  <button class="btn btn-inv-action subtle" data-go="trail" title="Money Trail">
+                    <span class="btn-inv-icon">◎</span>
+                    <span>เส้นทางเงิน</span>
+                  </button>
+                  <button class="btn btn-inv-action subtle" data-go="report" title="Outcome & Report">
+                    <span class="btn-inv-icon">▣</span>
+                    <span>Outcome & Report</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="investigation-head-right">
-              <span class="soft-pill" id="priorityLabel">—</span>
-              <div class="investigation-quick-nav">
-                <button class="btn btn-inv-action subtle" data-go="trail" title="Money Trail">
-                  <span class="btn-inv-icon">◎</span>
-                  <span>เส้นทางเงิน</span>
-                </button>
-                <button class="btn btn-inv-action subtle" data-go="report" title="Evidence Chain">
-                  <span class="btn-inv-icon">▣</span>
-                  <span>ห่วงโซ่หลักฐาน</span>
-                </button>
+
+            <!-- Case Metadata Strip -->
+            <div class="inv-case-metadata-strip" id="invCaseMetaStrip">
+              <div class="meta-item">
+                <span class="meta-label">Source Account</span>
+                <strong class="meta-val" id="invMetaSource">—</strong>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Destination Account</span>
+                <strong class="meta-val" id="invMetaTarget">—</strong>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Alert Amount</span>
+                <strong class="meta-val amount" id="invMetaAmount">—</strong>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Alert Date / Time</span>
+                <strong class="meta-val" id="invMetaTime">—</strong>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Case Status</span>
+                <strong class="meta-val" id="invMetaStatus"><span class="status-tag new">NEW</span></strong>
               </div>
             </div>
           </div>
 
-          <div class="two-col investigation-two-col">
-            <section class="panel panel-investigation-summary">
-              <h3>Investigation Summary</h3>
-              <div id="caseSummary"></div>
+          <!-- B. AI Agent Control Panel -->
+          <section class="panel inv-agent-control-panel">
+            <div class="inv-agent-control-header">
+              <div class="inv-agent-title-box">
+                <div class="ai-sparkle-icon">✧</div>
+                <div>
+                  <h3>Autonomous Bedrock Agent</h3>
+                  <p class="helper">Officer-initiated Converse Tool Use agent · Dynamically investigates suspect network and verifies evidence</p>
+                </div>
+              </div>
+              <div class="inv-agent-actions">
+                <button class="btn primary btn-run-ai" id="runAi" type="button">
+                  <span class="btn-icon">▶</span>
+                  <span class="btn-text">Run AI Investigation</span>
+                </button>
+                <button class="btn subtle btn-view-outcome" id="btnGoOutcome" data-go="report" type="button">
+                  <span>View Outcome & Report →</span>
+                </button>
+              </div>
+            </div>
 
-              <p class="disclaimer">
-                Priority Score เป็นคะแนนจัดลำดับการตรวจสอบ
-                ไม่ใช่โอกาสกระทำผิด และไม่ใช่การตัดสินความผิด
-              </p>
-            </section>
+            <div class="inv-agent-status-bar" id="invAgentStatusBar">
+              <div class="status-spinner-box" id="invAgentSpinner" hidden>
+                <span class="spinner-ring"></span>
+              </div>
+              <p id="agentProgress" class="helper" role="status">Ready to investigate. Click "Run AI Investigation" to start Bedrock autonomous tool execution.</p>
+            </div>
+          </section>
 
-            <section class="panel">
+          <!-- C & D. Two Columns: Preliminary Findings & AI Activity -->
+          <div class="two-col inv-workspace-grid">
+            <!-- Left: Preliminary Findings -->
+            <section class="panel inv-preliminary-findings-panel">
               <div class="section-head">
-                <h3>Tool Activity</h3>
-                <span class="soft-pill">RULE-BASED ENGINE</span>
+                <div>
+                  <h3>Preliminary Findings</h3>
+                  <small class="helper-sub">Executive synthesis for banking officers</small>
+                </div>
+                <span class="soft-pill" id="agentFindingBadge">AWAITING AI</span>
+              </div>
+              <div id="invOfficerFindings" class="officer-findings-box">
+                <div class="inv-empty-state" id="invFindingsEmpty">
+                  <p class="empty-title">ยังไม่ได้เริ่มการสืบสวนด้วย AI</p>
+                  <p class="empty-sub">กดปุ่ม <strong>Run AI Investigation</strong> ด้านบนเพื่อให้ Amazon Bedrock ตรวจสอบรายการเดินบัญชี ประเมินความเสี่ยง และติดตามเส้นทางการเงินจริง</p>
+                </div>
+                <div id="invFindingsContent" class="findings-rendered" hidden></div>
               </div>
 
-              <ol class="steps" id="toolSteps"></ol>
+              <!-- Rule-based baseline alert summary -->
+              <details class="inv-baseline-details">
+                <summary>Rule-Based Detection Baseline</summary>
+                <div id="caseSummary" class="inv-baseline-summary"></div>
+                <p class="disclaimer">
+                  Alert Priority Score เป็นคะแนนจัดลำดับคิวการตรวจสอบของระบบกฎ ไม่ใช่ข้อสรุปทางกฎหมายหรือการตัดสินความผิด
+                </p>
+              </details>
+            </section>
+
+            <!-- Right: AI Investigation Activity -->
+            <section class="panel inv-activity-panel">
+              <div class="section-head">
+                <div>
+                  <h3>AI Investigation Activity</h3>
+                  <small class="helper-sub">Real Bedrock Converse Tool Executions</small>
+                </div>
+                <span class="soft-pill" id="agentActivityBadge">AWAITING AI</span>
+              </div>
+
+              <div id="invToolListContainer">
+                <div class="inv-empty-tools" id="invToolsEmpty">
+                  <p class="empty-title">รอการเรียกใช้งานเครื่องมือ</p>
+                  <p class="empty-sub">เมื่อเริ่มการตรวจสอบ เครื่องมือที่ Bedrock AI เลือกใช้ตามบริบทของเคสจะแสดงที่นี่แบบไดนามิก</p>
+                </div>
+                <ol class="steps inv-real-steps" id="toolSteps"></ol>
+              </div>
+
+              <!-- Judge's Tool Trace Collapsible -->
+              <details class="judge-trace-details" id="judgeTraceDetails">
+                <summary class="judge-trace-summary">
+                  <span>🛠 Agent Tool Trace (Hackathon Judge Telemetry)</span>
+                  <span class="pill-mini">Nova Micro Converse</span>
+                </summary>
+                <div class="judge-trace-body">
+                  <div class="trace-meta-row" id="traceMetaRow">
+                    <span>Model: <code id="traceModelId">amazon.nova-micro-v1:0</code></span>
+                    <span>Turns: <code id="traceTurnsCount">—</code></span>
+                    <span>Executed Tools: <code id="traceToolsCount">—</code></span>
+                  </div>
+                  <div id="agentTrace" class="mt-agent-trace" hidden></div>
+                </div>
+              </details>
             </section>
           </div>
 
-          <section class="panel">
+          <!-- Recommended Next Accounts -->
+          <section class="panel inv-recommended-panel">
             <div class="section-head">
-              <h3>Recommended Next Accounts</h3>
+              <div>
+                <h3>Recommended Next Accounts to Inspect</h3>
+                <p class="helper">บัญชีในเครือข่ายที่ควรตรวจสอบลำดับถัดไปตามความสำคัญ</p>
+              </div>
               <button class="text-btn" data-go="trail">
-                ดูกราฟ →
+                ดูกราฟ Money Trail →
               </button>
             </div>
-
             <div id="recommendedAccounts" class="chips"></div>
           </section>
         </section>
 
-        <!-- หน้าที่ 5: Evidence & Report -->
+        <!-- หน้าที่ 5: Outcome & Report (2x2 Dashboard) -->
         <section class="page" id="page-report" hidden>
 
-          <div class="section-head">
+          <div class="section-head outcome-page-head">
             <div>
               <p class="eyebrow">EXPLAINABLE INVESTIGATION</p>
-              <h2>Evidence Chain & Report</h2>
+              <h2>Outcome & Report</h2>
+              <p class="outcome-subtitle">สรุปผลการสืบสวนทางการเงิน 4 มิติ และรายงานข้อเสนอแนะสำหรับเจ้าหน้าที่</p>
             </div>
 
-            <button class="btn primary" id="downloadReport">
-              ↓ ดาวน์โหลดรายงาน
+            <button class="btn primary btn-download-report" id="downloadReport">
+              ↓ ดาวน์โหลดรายงานทางการ
             </button>
           </div>
 
-          <section class="panel">
-            <div class="section-head">
-              <h3>Evidence Chain</h3>
-              <span class="helper">
-                อ้างอิง Transaction ID จากข้อมูลจำลอง
-              </span>
-            </div>
-
-            <div id="evidenceList" class="evidence-list"></div>
-          </section>
-
-          <div class="two-col">
-            <section class="panel">
-              <h3>Cross-Case Connections</h3>
-              <div id="crossCases"></div>
-            </section>
-
-            <section class="panel">
-              <div class="section-head">
-                <h3>AWS Agent Handoff</h3>
-                <span class="soft-pill" id="awsStatus">
-                  NOT CONNECTED
-                </span>
+          <!-- 2x2 Outcome Dashboard -->
+          <div class="outcome-dashboard-2x2">
+            <!-- Card 1: Money Flow Visualization -->
+            <section class="panel outcome-card outcome-card-flow">
+              <div class="outcome-card-header">
+                <div class="card-title-group">
+                  <span class="card-icon">◎</span>
+                  <div>
+                    <h3>Money Flow Visualization</h3>
+                    <small class="helper-sub">เส้นทางเงินและบัญชีที่เกี่ยวข้องจริง</small>
+                  </div>
+                </div>
+                <span class="soft-pill" id="outcomeFlowBadge">CASE FLOW</span>
               </div>
 
-              <p class="helper">
-                พื้นที่รอรับผลจริงจาก Backend ของเพื่อน
-                ไม่ได้เรียก Bedrock อัตโนมัติ
-              </p>
+              <div class="outcome-card-body">
+                <div id="outcomeFlowPreview" class="flow-preview-container">
+                  <!-- Dynamic SVG/flow nodes populated by JS -->
+                </div>
+                <div class="flow-metrics-row" id="outcomeFlowMetrics">
+                  <!-- Flow stats -->
+                </div>
+              </div>
 
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                <button class="btn subtle" id="runAi">
-                  ขอ AI Summary ผ่าน API
+              <div class="outcome-card-footer">
+                <button class="btn subtle btn-view-full-trail" data-go="trail" id="btnOutcomeViewTrail">
+                  <span>◎ View Full Money Trail →</span>
                 </button>
               </div>
+            </section>
 
-              <div id="aiResult" class="ai-result" aria-live="polite">
-                ยังไม่ได้เชื่อม AWS · ใช้รายงานแบบ Rule-based ได้
+            <!-- Card 2: Evidence Chain -->
+            <section class="panel outcome-card outcome-card-evidence">
+              <div class="outcome-card-header">
+                <div class="card-title-group">
+                  <span class="card-icon">▣</span>
+                  <div>
+                    <h3>Evidence Chain</h3>
+                    <small class="helper-sub">สัญญาณหลักฐานและสถานะการตรวจสอบ</small>
+                  </div>
+                </div>
+                <span class="soft-pill" id="outcomeEvidenceBadge">— SIGNALS</span>
+              </div>
+
+              <div class="outcome-card-body">
+                <div id="outcomeEvidenceList" class="outcome-evidence-list">
+                  <!-- Populated dynamically with verified / requires-verification badges -->
+                </div>
+              </div>
+
+              <div class="outcome-card-footer">
+                <span class="evidence-legend-note">
+                  <span class="dot-legend verified"></span> ยืนยันในระบบ
+                  <span class="dot-legend unverified"></span> ต้องตรวจสอบเพิ่ม
+                </span>
+              </div>
+            </section>
+
+            <!-- Card 3: AI Investigation Summary -->
+            <section class="panel outcome-card outcome-card-summary">
+              <div class="outcome-card-header">
+                <div class="card-title-group">
+                  <span class="card-icon">✧</span>
+                  <div>
+                    <h3>AI Investigation Summary</h3>
+                    <small class="helper-sub">Amazon Bedrock Autonomous Agent Synthesis</small>
+                  </div>
+                </div>
+                <span class="soft-pill" id="outcomeSummaryBadge">AWAITING AI</span>
+              </div>
+
+              <div class="outcome-card-body">
+                <div id="outcomeAiSummaryBox" class="ai-summary-box">
+                  <div class="inv-empty-state" id="outcomeAiEmpty">
+                    <p class="empty-title">ยังไม่ได้เริ่มการสืบสวนด้วย AI</p>
+                    <p class="empty-sub">กรุณากดเริ่มการสืบสวนด้วย AI เพื่อให้ Bedrock Agent สรุปผลการตรวจสอบ</p>
+                    <button class="btn primary btn-sm" data-go="investigation">ไปยังหน้า Investigation →</button>
+                  </div>
+                  <div id="outcomeAiSummaryText" class="ai-summary-text" hidden></div>
+                  <p id="outcomeAiSummary" hidden></p>
+                </div>
+              </div>
+
+              <div class="outcome-card-footer">
+                <span class="ai-disclaimer-note">
+                  🛡️ Human Review Required · Bedrock Nova Micro Agent
+                </span>
+              </div>
+            </section>
+
+            <!-- Card 4: Investigation Report -->
+            <section class="panel outcome-card outcome-card-report">
+              <div class="outcome-card-header">
+                <div class="card-title-group">
+                  <span class="card-icon">▤</span>
+                  <div>
+                    <h3>Investigation Report</h3>
+                    <small class="helper-sub">รายงานสรุปข้อค้นพบและข้อเสนอแนะ</small>
+                  </div>
+                </div>
+                <span class="soft-pill" id="outcomeReportBadge">OFFICIAL</span>
+              </div>
+
+              <div class="outcome-card-body">
+                <div class="report-meta-grid" id="outcomeReportMetaGrid">
+                  <!-- Case ID, Source, Target, Alert Amount, Risk Level -->
+                </div>
+
+                <div class="report-section-block">
+                  <h4 class="report-block-title">Key Findings Summary</h4>
+                  <div id="outcomeKeyFindings" class="key-findings-content"></div>
+                </div>
+
+                <div class="report-section-block">
+                  <h4 class="report-block-title">Recommended Next Action</h4>
+                  <div id="outcomeNextActions" class="next-actions-content">
+                    <p class="helper">รอผลการตรวจสอบด้วย AI หรือทบทวนตามแนวปฏิบัติธนาคาร</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="outcome-card-footer">
+                <button class="btn primary btn-sm" id="btnDownloadReportCard">
+                  ↓ ดาวน์โหลดรายงาน (.txt)
+                </button>
               </div>
             </section>
           </div>
+
+          <!-- Cross-case links preserved for complete context -->
+          <section class="panel outcome-cross-cases-panel" id="outcomeCrossCasesPanel">
+            <div class="section-head">
+              <h3>Cross-Case Connections</h3>
+              <span class="helper">เคสในอดีตที่มีบัญชีหรือเครือข่ายเชื่อมโยง</span>
+            </div>
+            <div id="crossCases"></div>
+          </section>
+
+          <!-- Hidden elements preserved for compatibility with existing tests/scripts -->
+          <div id="evidenceList" hidden></div>
+          <div id="aiResult" hidden></div>
+          <span id="awsStatus" hidden></span>
         </section>
 
       </main>

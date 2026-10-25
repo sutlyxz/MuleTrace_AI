@@ -17,5 +17,6 @@ const _origin =
 
 window.MULETRACE_CONFIG = {
   apiUrl: `${_origin}/api/ai/summary`,
-  casesApiUrl: `${_origin}/api/cases`
+  casesApiUrl: `${_origin}/api/cases`,
+  agentApiUrl: `${_origin}/api/ai/investigate`
 };
